@@ -1,0 +1,11 @@
+
+Spectrometer:
+  name: TERASMART
+  systemNum: 0
+TScan:
+  begin: -320
+  numAvgs: 4
+  window: 400
+Export:
+  saveDir: 'C:\Users\TeraSmart\Documents\API_MenloSystem\RamGlobalSystem\TQC\Export'
+  filename: data.dat         # files wont be overwritten but renamed as data_001.dat
