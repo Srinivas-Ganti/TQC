@@ -3,7 +3,13 @@ import numpy as np
 import os
 import sys
 import yaml
-from PyQt5.QtWidgets import QApplication
+from PyQt5 import uic
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from pyqtgraph import PlotWidget, graphicsItems
+from pyqtgraph.graphicsItems.PlotDataItem import PlotDataItem, PlotCurveItem
+from scipy import signal
 
 
 baseDir =  os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -14,9 +20,10 @@ from Controller.TQC_controller import *
 
 class Experiment():
     
-    def __init__(self, config_file):  
-
+    def __init__(self, loop, config_file):  
+        self.loop = loop
         self.config_file = config_file
+        self.configLoaded = False
         self.loadConfig()
         self.loadDevice()
 
@@ -31,12 +38,13 @@ class Experiment():
             data = yaml.load(f, Loader= yaml.FullLoader)
 
         self.config = data
+        self.configLoaded = True
 
 
     def loadDevice(self):
 
         
-        self.device = Device(loop)
+        self.device = Device(self.loop)
         self.initialise()
 
     
@@ -84,7 +92,59 @@ class Experiment():
         np.savetxt(dataFile, tds, header = header)
 
 
+    def calculateFFT(self, time, amp):
         
+        """
+            Calculate FFT of THz pulse.
+
+            :type time: numpy array
+            :param time: timeaxis data of THz pulse
+            :type amp: numpy array
+            :param amp: Pulse amplitude data.
+
+            :return: frequency axis data and FFT data
+            :rtype: numpy array, numpy array
+
+        """        
+
+        t_ser_len = 16384
+        T = time[1]-time[0] 
+        N = len(time)     
+        w = signal.tukey(N, alpha = 0.1)   
+        amp = w*amp                                        
+        pad = t_ser_len - N  
+        time = np.append(time, np.zeros(pad))          
+        amp = np.append(amp, np.zeros(pad))
+      
+        N0 = len(time)
+        freq = np.fft.fftfreq(N0, T)
+        zero_THz_idx = self.find_nearest(freq, 0)[0]
+        freq= freq[zero_THz_idx:int(len(freq)/2)]
+        FFT = np.fft.fft(amp)/(N0/2)   
+        FFT = FFT[zero_THz_idx:int(len(FFT)/2)]     
+        FFT = np.abs(FFT)
+        return freq, FFT
+
+        
+    def find_nearest(array, value):        
+
+        """"
+        Retrun the index and value of the element in the array that is nearest to the given input value
+        
+            :type array: numpy array
+            :param array: np array in which to search for nearest value.
+            :type value: float, or int
+            :param value: array element to be compared to this value.
+
+            :return: resulting array index and its value, 
+            :rtype: int, float
+
+
+        """
+
+        array = np.asarray(array)
+        idx = (np.abs(array - value)).argmin()
+        return idx, array[idx] 
 
         
         
@@ -100,7 +160,7 @@ if __name__ == "__main__":
     asyncio.set_event_loop(loop)
 
    
-    experiment = Experiment('experiment.yml')
+    experiment = Experiment(loop, 'experiment.yml')
     print(experiment.config)
    
     
