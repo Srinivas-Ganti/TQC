@@ -1,0 +1,9 @@
+# Uncomment the sensor that will be used in QC. Only one sensor name should be uncommented at a time.
+ F1
+# AO3
+
+
+# Enter/ Edit the filename of standard reference in the <Resources/StandardReferences> folder
+
+STDREF: 2021-05-25T095546_PID_NIL_SN_466_Reference.txt
+
