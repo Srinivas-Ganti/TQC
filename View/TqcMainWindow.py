@@ -33,7 +33,9 @@ class TqcMainWindow(QWidget):
         """
             Connect GUI object and validator signals to respective methods.
         """
-        
+      
+        self.experiment.device.pulseReady.connect(self.processPulses)
+        self.experiment.device.pulseReady.connect(self.experiment.processPulses)
         self.btnStart.clicked.connect(self.experiment.device.start)
         self.btnStop.clicked.connect(self.experiment.device.stop) 
         self.livePlot.scene().sigMouseMoved.connect(self.mouseMoved)
@@ -55,6 +57,21 @@ class TqcMainWindow(QWidget):
         self.lEditSensorId.editingFinished.connect(self.validateEditSensorId)
 
  
+    @asyncSlot()
+    async def processPulses(self,data):
+
+        """"GUI button state management during data processing"""
+
+        await asyncio.sleep(0.01)
+        if not self.experiment.qcRunning and not self.experiment.timelapseRunning:
+            self.btnStartQC.setEnabled(True)
+            if self.experiment.classification == "Sensor":
+                self.btnNewStdRef.setEnabled(True)
+        else:
+            self.btnStartQC.setEnabled(False)
+            self.btnNewStdRef.setEnabled(False)
+        
+
     def mouseMoved(self, evt):
 
         """
