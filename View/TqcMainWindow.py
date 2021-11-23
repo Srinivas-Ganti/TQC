@@ -150,9 +150,10 @@ class TqcMainWindow(QWidget):
         self.chipsPerWafer = int(self.experiment.config['QC']['chipsPerWafer'])
         self.lEditWaferId.setText(str(self.experiment.config['QC']['waferId']))
         self.lEditWaferId.editingFinished.emit()
+        self.loadQC()
         self.lEditSensorId.setText(str(self.experiment.config['QC']['sensorId']))
         self.lEditSensorId.editingFinished.emit() 
-        self.loadQC()
+        
 
 
     def loadTDSParams(self):
@@ -189,6 +190,7 @@ class TqcMainWindow(QWidget):
         """
             Load timelapse measurement parameters related to interval and duration.
         """
+
 
         if self.experiment.intervalOK and self.experiment.repeatsOk:
             self.btnStartTimelapse.setEnabled(True)
@@ -237,7 +239,7 @@ class TqcMainWindow(QWidget):
                 print("Interval is a valid time input")
                 print("Timelapse interval ACCEPTED")
                 self.experiment.interval = interval.m_as("second")
-                print(f"Interval is set to {self.interval} seconds")
+                print(f"Interval is set to {self.experiment.interval} seconds")
             else:
                 print("Interval units are not valid time inputs, Setting default config values")
                 print("Enter valid units, for example: '0.5hour', '420ms', '5min' . . . ")
