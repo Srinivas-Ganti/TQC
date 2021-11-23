@@ -19,6 +19,8 @@ from pint.errors import *
 
 class TqcMainWindow(QWidget):
 
+    dataUpdateReady = pyqtSignal(object)
+
     def __init__(self, experiment = None):
 
         super().__init__()
@@ -34,14 +36,14 @@ class TqcMainWindow(QWidget):
         
         self.btnStart.clicked.connect(self.experiment.device.start)
         self.btnStop.clicked.connect(self.experiment.device.stop) 
-        # self.livePlot.scene().sigMouseMoved.connect(self.mouseMoved)
-        # self.btnResetAvg.clicked.connect(self.experiment.device.resetAveraging)
+        self.livePlot.scene().sigMouseMoved.connect(self.mouseMoved)
+        self.btnResetAvg.clicked.connect(self.experiment.device.resetAveraging)
         # self.btnStartAveraging.clicked.connect(self.startAveraging)
         # self.btnStartTimelapse.clicked.connect(self.startTimelapse)
         # self.btnStartQC.clicked.connect(self.startQC)
         # self.btnFinishQC.clicked.connect(self.finishQC)
         # self.btnNewStdRef.clicked.connect(self.measureStandardRef)
-        # self.dataUpdateReady.connect(self.updatePlot)
+        self.dataUpdateReady.connect(self.updatePlot)
         # self.sensorUpdateReady.connect(self.checkNextSensor)
 
         self.lEditTdsStart.editingFinished.connect(self.validateEditStart)
@@ -51,7 +53,55 @@ class TqcMainWindow(QWidget):
         self.lEditRepeatNum.editingFinished.connect(self.validateEditRepeats) 
         self.lEditWaferId.editingFinished.connect(self.validateEditWaferId)
         self.lEditSensorId.editingFinished.connect(self.validateEditSensorId)
+
+ 
+    def mouseMoved(self, evt):
+
+        """
+            Track mouse movement on data plot in plot units (arb.dB vs THz)
+
+            :type evt: pyqtSignal 
+            :param evt: Emitted when the mouse cursor moves over the scene. Contains scene cooridinates of the mouse cursor.
+
+        """
+
+        pos = evt
+        if self.livePlot.sceneBoundingRect().contains(pos):
+            mousePoint = self.livePlot.plotItem.vb.mapSceneToView(pos)
+            x = float("{0:.3f}".format(mousePoint.x()))
+            y = float("{0:.3f}".format(mousePoint.y()))
+            self.xyLabel.setText(f"last cursor position: {x, y}")
+
+         
+    def plot(self, x, y):
+
+        """
+            Plot data on existing plot widget.
+
+            :type x: numpy array
+            :param x: frequency axis data
+            :type y: numpy array
+            :param y: Pulse FFT data.
+
+            :return: plot data.
+            :rtype: PlotWidget.plot  
+
+        """   
+
+        return self.livePlot.plot(x,y)
+
+
+    def updatePlot(self, avgPulseFft):
         
+        """
+            Update plot items.
+
+            :type avgPulseFft: numpy array
+            :param avgPulseFft: averaged value of FFT pulse (in progress)
+        """
+
+        self.experiment.plotDataContainer['currentAveragePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(avgPulseFft)))
+
 
     def validateEditStart(self):
 
@@ -81,14 +131,16 @@ class TqcMainWindow(QWidget):
 
 
     def validateDefaultInputs(self):
-
+        
+        """
+            Validate GUI input parameters on startup
+        """
         self.lEditTdsStart.setText(str(self.experiment.config['TScan']['begin']))
         self.lEditTdsStart.editingFinished.emit()
         self.lEditTdsAvgs.setText(str(self.experiment.config['TScan']['numAvgs']))
         self.lEditTdsAvgs.editingFinished.emit()
         self.loadTDSParams()
-        print("> [SCANCONTROL] Setting TDS parameters: Done\n")
-                 
+        print("> [SCANCONTROL] Setting TDS parameters: Done\n")        
         self.lEditInterval.setText(str(self.experiment.config['Timelapse']['interval']))
         self.lEditInterval.editingFinished.emit()
         self.lEditRepeatNum.setText(str(self.experiment.config['Timelapse']['repeats']))
@@ -100,7 +152,6 @@ class TqcMainWindow(QWidget):
         self.lEditWaferId.editingFinished.emit()
         self.lEditSensorId.setText(str(self.experiment.config['QC']['sensorId']))
         self.lEditSensorId.editingFinished.emit() 
-
         self.loadQC()
 
 
@@ -146,7 +197,6 @@ class TqcMainWindow(QWidget):
             self.btnStartTimelapse.setEnabled(False)
             self.lblTlapseStatus.setText("Timelapse: Not available")
 
-
     
     def validateEditAverages(self):
 
@@ -162,10 +212,12 @@ class TqcMainWindow(QWidget):
             self.experiment.avgsOk = True
             self.experiment.numAvgs = int(self.lEditTdsAvgs.text())
             self.experiment.tdsParams['numAvgs'] = self.experiment.numAvgs
+            self.experiment.device.setDesiredAverages(self.experiment.tdsParams['numAvgs'])
         else:
             print("[ERROR] InvalidInput: Setting default config value")
             self.experiment.avgsOK = False
             self.lEditTdsAvgs.setText(str(self.experiment.config['TScan']['numAvgs']))
+            self.experiment.device.setDesiredAverages(self.experiment.config['TScan']['numAvgs'])
 
         
     def validateEditInterval(self):
@@ -276,8 +328,6 @@ class TqcMainWindow(QWidget):
         self.experiment.sensorIdOk = True
         if not self.experiment.sensorIdOk:
             self.btnStartQC.setEnabled(False)
-
-#######
 
 
     def initAttribs(self):
