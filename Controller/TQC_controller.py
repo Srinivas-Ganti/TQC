@@ -21,6 +21,7 @@ from Menlo.scancontrolclient import ScanControlClient, ScanControlStatus
 class Device(QWidget):
 
     dataUpdateReady = pyqtSignal(object)
+    pulseReady = pyqtSignal(object)
     
     """Controller class for Menlo TeraSmart Spectrometer"""
 
@@ -120,7 +121,7 @@ class Device(QWidget):
         """
 
         try:
-            self.resetAveraging()
+            # self.resetAveraging()
             await self.scanControl.start()
             print("> [SCANCONTROL] Opening Detector") 
             
