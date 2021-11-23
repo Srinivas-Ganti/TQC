@@ -18,10 +18,14 @@ sys.path.append(baseDir)
 from Controller.TQC_controller import *
 
 
-class Experiment():
+class Experiment(QWidget):
+
     
-    def __init__(self, loop, config_file):  
+    def __init__(self, loop, config_file): 
+
+        super().__init__()
         self.loop = loop
+        
         self.config_file = config_file
         self.configLoaded = False
         self.loadConfig()
@@ -126,7 +130,7 @@ class Experiment():
         return freq, FFT
 
         
-    def find_nearest(array, value):        
+    def find_nearest(self, array, value):        
 
         """"
         Retrun the index and value of the element in the array that is nearest to the given input value
@@ -147,7 +151,10 @@ class Experiment():
         return idx, array[idx] 
 
         
-        
+
+
+
+
 #***************************************************************
 
 if __name__ == "__main__":
