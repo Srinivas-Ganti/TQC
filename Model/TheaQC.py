@@ -12,8 +12,10 @@ from MenloLoader import MenloLoader
 class TheaQC(Experiment):
     
     def __init__(self, loop = None, configFile = None):
+        
         super().__init__(loop, configFile)
         self.initialise()
+
 
     def initialise(self):
 
