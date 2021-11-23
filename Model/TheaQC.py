@@ -134,6 +134,25 @@ class TheaQC(Experiment):
             print(f"QC data will be saved in: {self.qcSaveDir}")
 
 
+    @asyncSlot()
+    async def processPulses(self,data):
+
+        """Process data for event loop
+        
+            :type data: dict
+            :param data: dictionary containig pulse information from Controller.
+        """
+
+       
+        self.pulseAmp = data['amplitude'][0]
+        self.timeAxis = data['timeaxis'] -  data['timeaxis'][0]
+        self.timeAxis = self.timeAxis[:self.find_nearest(self.timeAxis, self.TdsWin)[0]+1]                   
+        self.pulseAmp = self.pulseAmp[:self.find_nearest(self.timeAxis, self.TdsWin)[0]+1]
+        self.pulseAmp = self.pulseAmp.copy()
+        self.freq, self.FFT = self.calculateFFT(self.timeAxis,self.pulseAmp)
+        print(self.FFT)
+        await asyncio.sleep(0.1)
+        
 
 #*********************************************************************************************************************
 
