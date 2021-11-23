@@ -124,6 +124,7 @@ class TheaQC(Experiment):
                         'fUB':self.config['QC']['upperFreqBound'],
                         'errTh':self.config['QC']['allowedErrordB'],
                         'nErrV':self.config['QC']['maxViolations']}
+        self.chipsPerWafer = self.config['QC']['chipsPerWafer']
         qcSaveDir = self.config['QC']['qcSaveDir']
         if qcSaveDir is None or not os.path.isdir(qcSaveDir):
             self.qcSaveDir = os.path.join(baseDir, "qcData")
@@ -131,6 +132,7 @@ class TheaQC(Experiment):
         else:
             self.qcSaveDir = qcSaveDir
             print(f"QC data will be saved in: {self.qcSaveDir}")
+
 
 
 #*********************************************************************************************************************
