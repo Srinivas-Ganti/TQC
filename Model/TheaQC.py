@@ -3,6 +3,8 @@ import os
 
 baseDir =  os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 rscDir = os.path.join(baseDir, "Resources")
+# configDir  = os.path.join(baseDir, "Config") # use only if making a separate config dir
+configDir = os.path.join(baseDir, "Model")  # if keeping in same dir as model
 sys.path.append(baseDir)
 
 from Model.experiment import *
@@ -41,7 +43,7 @@ class TheaQC(Experiment):
         self.repeatsOk = False                                # Flag for timelapse repeats validation
         self.intervalOK = False                               # Flag for timelapse duration validation
         self.tlapseSaveDir = None                             # Path for saving timelapse data
-        self.classification = None                            # Result of TDS pulse classification.
+        self.classification = "Sensor"                            # Result of TDS pulse classification.
         
         self.qcAvgTask = None                                 # QC averaging task (automatic - cartridge sensing)
         self.timelapseTask = None                             # timelapse task (manual)
@@ -62,7 +64,7 @@ class TheaQC(Experiment):
         """
 
         self.pulseAmp = None                       # Received pulse data              
-        self.avgPulseAmp = None                    # Averaged result
+        
         self.timeAxis = None                       # time data 
         self.timelapseRunning = False              # Flag to check if timelapse is running
         self.TdsWin = None                         # TDS windowing duration (ps)
@@ -142,7 +144,6 @@ class TheaQC(Experiment):
             :type data: dict
             :param data: dictionary containig pulse information from Controller.
         """
-
        
         self.pulseAmp = data['amplitude'][0]
         self.timeAxis = data['timeaxis'] -  data['timeaxis'][0]
@@ -156,7 +157,39 @@ class TheaQC(Experiment):
         await asyncio.sleep(0.1)
         
  
-    
+    @asyncSlot()
+    async def measureStandardRef(self):
+
+        """Measure standard reference for QC and update config file."""
+        await asyncio.sleep(1)
+        while not self.device.avgTask.done():
+            await asyncio.sleep(0.5)
+        if self.device.avgTask.done():
+            rawExportData = np.vstack([self.timeAxis, self.pulseAmp]).T
+            currentDatetime = datetime.now()
+            header = f"""THEA QC - RAM Group GmbH, powered by Menlo Systems\nProgram Version 1.04\nAverage over {self.numAvgs} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}
+    User time axis shift: {self.config['TScan']['begin']*-1}
+    Time [ps]              THz Signal [mV]"""
+            base_name = f"""{currentDatetime.strftime("%d%m%yT%H%M%S")}_WID_{self.waferId}_SN_{self.sensorId}_STANDARD_Reference"""
+            refPath = os.path.join(rscDir,"StandardReferences", base_name)
+            data_file = os.path.join(refPath.replace("/","\\") +'.txt')
+            print(data_file)
+            np.savetxt(data_file, rawExportData, header = header, delimiter = '\t' )  
+            
+            newStdRef = data_file.split('/')[-1]
+            self.config['QC']['stdRefFileName'] = newStdRef
+            with open(os.path.join(configDir,"theaConfig.yml"), 'w') as f:
+                f.write(yaml.dump(self.config, default_flow_style = False))
+            
+            self.loadConfig()
+            self.initialise()
+            self.loadStandardRef()
+            print("STD REF LOADED")
+            
+
+            
+        
+
     @asyncSlot()
     async def startAveraging(self):
 
@@ -180,7 +213,7 @@ class TheaQC(Experiment):
         """
 
 
-        refPath = os.path.join(rscDir,"StandardReferences", self.config['QC']['stdRefFileName'])
+        refPath = os.path.join(rscDir,"StandardReferences", self.config['QC']['stdRefFilePath'])
         print(refPath)
         try:
             stdRefData = MenloLoader([refPath]).data
@@ -188,7 +221,7 @@ class TheaQC(Experiment):
             print("Standard reference loaded")
             print(self.stdRef)
         except:
-            print(f"[ERROR]: FileNotFound. No resource file called {self.config['QC']['stdRefFileName']}")
+            print(f"[ERROR]: FileNotFound. No resource file called {self.config['QC']['stdRefFilePath']}")
 
 
 
@@ -205,10 +238,10 @@ class TheaQC(Experiment):
                 self.timelapseTask.cancel()
 
             if self.device.avgTask is not None:
-                print("CANCELLING AVG TASK")
                 self.device.avgTask.cancel()
+                print("Averaging cancelled")
             if self.qcAvgTask is not None:
-                print("CANCELLING QC TASK")
+                print("QC cancelled")
                 self.qcAvgTask.cancel()                
         except CancelledError:
             print("Shutting down tasks")
