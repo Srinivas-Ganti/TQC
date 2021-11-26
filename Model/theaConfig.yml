@@ -6,17 +6,19 @@ Classification:
   threshold: 0.005
   width: 19
 Export:
-  saveDir: 'C:\Users\TeraSmart\Documents\API_MenloSystem\RamGlobalSystem\TQC\Export'
-  filename: data.dat         # files wont be overwritten but renamed as data_001.dat  
+  filename: data.dat
+  saveDir: C:\Users\TeraSmart\Documents\API_MenloSystem\RamGlobalSystem\TQC\Export
 QC:
   allowedErrordB: 1.25
   chipsPerWafer: 75
+  handlingTime: 2s
   lowerFreqBound: 0.5
   maxViolations: 7
   qcAverages: 10
   qcSaveDir: C:\Users\TeraSmart\Documents\API_MenloSystem\RamGlobalSystem\TQC\Export
   sensorId: 1
-  stdRefFileName: C:\Users\TeraSmart\Documents\API_MenloSystem\RamGlobalSystem\LiveQC\rWatchDog\QChecker\Resources\StandardReferences\180821T162000_WID_W0_SN_3_STANDARD_Reference.txt
+  stdRefFileName: C:\Users\TeraSmart\Documents\API_MenloSystem\RamGlobalSystem\TQC\Resources\StandardReferences\261121T231942_WID_W0_SN_1_STANDARD_Reference.txt
+  stdRefFilePath: C:\Users\TeraSmart\Documents\API_MenloSystem\RamGlobalSystem\LiveQC\rWatchDog\QChecker\Resources\StandardReferences\180821T162000_WID_W0_SN_3_STANDARD_Reference.txt
   upperFreqBound: 0.9
   waferId: W0000
 Spectrometer:
