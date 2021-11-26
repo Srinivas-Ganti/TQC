@@ -34,14 +34,37 @@ class Device(QWidget):
             self.client = ScanControlClient(loop = loop)
             self.connect()
             self.scanControl = self.client.scancontrol
-            self.isAcquiring = None
+            self.isAcquiring = False                   # Flag to check if pulses are being received
+            self.keepRunning = False                   # Flag to keep runnning the processing of TDS pulses
             self.pulseReady = self.scanControl.pulseReady
-            
+            self.pulseData = None
+            self.avgTask = None                        # averaging task 
+            self.status = None
+            self.pulseReady.connect(self.processPulses)   
+            self.scanControl.statusChanged.connect(self._statusChanged) 
         else:
             print("CLIENT ERROR:")
 
+
     def __str__(self):
+        
         return "A device object to control Menlo TeraSmart, Device is a subclass of QWidget"
+
+
+    @asyncSlot()
+    async def _statusChanged(self, status):
+
+        """
+            AsyncSlot Coroutine to indicate ScanControl Staus.
+        """        
+
+        strStatus = str(ScanControlStatus(status).name)
+        self.status = strStatus
+        if not self.status == "Acquiring":
+            self.isAcquiring = False
+        else:
+            self.isAcquiring = True
+
 
     def setBegin(self, begin):
 
@@ -90,7 +113,8 @@ class Device(QWidget):
             print(f"[ERROR]: InputError: 'end' should be a numeric value in picoseconds, got {type(end)} instead.\n")
 
 
-    def collectAverages(self, data):
+    @asyncSlot()
+    async def collectAveragesRepeatedly(self, data):
 
         """
             Print out pulse information and emit final average as signal.
@@ -98,7 +122,9 @@ class Device(QWidget):
             :type data: dict
             :param data: data dictionary with THz pulse information
         """
-
+        asyncio.sleep(0.01)
+        if self.scanControl.currentAverages > 0:
+            self.pulseData = data
         print(f"Averaging: {self.scanControl.currentAverages}/{self.scanControl.desiredAverages}\r")
         if self.scanControl.currentAverages==self.scanControl.desiredAverages:
             avgData = data 
@@ -106,11 +132,34 @@ class Device(QWidget):
             self.dataUpdateReady.emit(avgData)
 
 
+    @asyncSlot()
+    async def doAvgTask(self):
+
+        """Perform averaging task and emit final result as signal"""
+
+        await asyncio.sleep(0.01)
+        
+        if self.avgTask is not None:
+            self.resetAveraging()
+
+            if not self.isAcquiring:
+                self.start()            
+
+            print(f"Averaging: {self.scanControl.currentAverages}/{self.scanControl.desiredAverages}\r")
+            if self.scanControl.currentAverages==self.scanControl.desiredAverages:
+                avgData = self.pulseData
+                self.resetAveraging()
+                self.dataUpdateReady.emit(avgData)
+                    
+
     def resetAveraging(self):
+
+        """
+            Reset scancontrol averages
+        """
 
         print("> [SCANCONTROL] Resetting averages")
         self.scanControl.resetAveraging()
-
 
 
     @asyncSlot()    
@@ -161,11 +210,17 @@ class Device(QWidget):
 
     def done(self, data):
 
-        print("**********************Done**************************")
+        print("**********************Averaging Done**************************")
         print(data)
-        
 
-  
+
+    @asyncSlot()
+    async def processPulses(self, data):
+
+        self.pulseData = data
+
+#*********************************************************************************************************************
+
 
 if __name__ == "__main__":
 
@@ -182,7 +237,7 @@ if __name__ == "__main__":
     
 
     # Connections are only for example, not hardcoded into the controller class
-    dev.pulseReady.connect(dev.collectAverages) 
+    dev.pulseReady.connect(dev.collectAveragesRepeatedly) 
     dev.dataUpdateReady.connect(dev.done)
     
     # Test of repeated averaging
