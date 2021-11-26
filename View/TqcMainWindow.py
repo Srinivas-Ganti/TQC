@@ -34,13 +34,24 @@ class TqcMainWindow(QWidget):
             Connect GUI object and validator signals to respective methods.
         """
       
+        self.experiment.device.scanControl.statusChanged.connect(self._statusChanged)
+        
         self.experiment.device.pulseReady.connect(self.processPulses)
         self.experiment.device.pulseReady.connect(self.experiment.processPulses)
+        self.experiment.device.pulseReady.connect(self.startAveraging)
+
+        self.experiment.device.dataUpdateReady.connect(self.experiment.device.done)
         self.btnStart.clicked.connect(self.experiment.device.start)
         self.btnStop.clicked.connect(self.experiment.device.stop) 
+        self.btnStop.clicked.connect(self.experiment.cancelTasks)
         self.livePlot.scene().sigMouseMoved.connect(self.mouseMoved)
+
         self.btnResetAvg.clicked.connect(self.experiment.device.resetAveraging)
-        # self.btnStartAveraging.clicked.connect(self.startAveraging)
+        self.btnResetAvg.clicked.connect(self.resetAveraging)
+
+        self.btnStartAveraging.clicked.connect(self.experiment.startAveraging)
+        
+
         # self.btnStartTimelapse.clicked.connect(self.startTimelapse)
         # self.btnStartQC.clicked.connect(self.startQC)
         # self.btnFinishQC.clicked.connect(self.finishQC)
@@ -56,7 +67,26 @@ class TqcMainWindow(QWidget):
         self.lEditWaferId.editingFinished.connect(self.validateEditWaferId)
         self.lEditSensorId.editingFinished.connect(self.validateEditSensorId)
 
- 
+
+
+    @asyncSlot()
+    async def startAveraging(self, data):
+
+        """"Update averaging progress bar"""
+        await asyncio.sleep(0.01)
+        self.progAvg.setValue(int(self.experiment.device.scanControl.currentAverages/\
+                                 self.experiment.device.scanControl.desiredAverages*100))
+
+
+    @asyncSlot()
+    async def resetAveraging(self):
+
+        """"Reset averaging progress bar"""
+
+        await asyncio.sleep(0.01)
+        self.progAvg.setValue(0)
+
+
     @asyncSlot()
     async def processPulses(self,data):
 
@@ -70,7 +100,30 @@ class TqcMainWindow(QWidget):
         else:
             self.btnStartQC.setEnabled(False)
             self.btnNewStdRef.setEnabled(False)
-        
+        if self.experiment.device.isAcquiring:
+            if self.plotDataContainer['livePulseFft'] is None :
+                self.plotDataContainer['livePulseFft'] = self.plot(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
+                self.plotDataContainer['livePulseFft'].curve.setPen(color = self.colorLivePulse, width = self.averagePlotLineWidth)
+            elif self.plotDataContainer['livePulseFft'] is not None and self.experiment.avgProgVal < 100 :
+                self.plotDataContainer['livePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
+                self.plotDataContainer['livePulseFft'].curve.setPen(color = self.colorLivePulse, width = self.averagePlotLineWidth)
+                
+            elif self.plotDataContainer['livePulseFft'] is not None and self.experiment.avgProgVal == 100:
+                
+                self.plotDataContainer['livePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
+                self.plotDataContainer['livePulseFft'].curve.setPen(color = self.colorlivePulseBackground, width = self.livePlotLineWidth)
+                self.plotDataContainer['currentAveragePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(self.experiment.currentAverageFft)))
+            
+
+    @asyncSlot()
+    async def _statusChanged(self, status):
+
+        """
+            AsyncSlot Coroutine to indicate ScanControl Staus.
+        """        
+
+        self.lblStatus.setText("Status: " + self.experiment.device.status) 
+    
 
     def mouseMoved(self, evt):
 
@@ -152,6 +205,7 @@ class TqcMainWindow(QWidget):
         """
             Validate GUI input parameters on startup
         """
+
         self.lEditTdsStart.setText(str(self.experiment.config['TScan']['begin']))
         self.lEditTdsStart.editingFinished.emit()
         self.lEditTdsAvgs.setText(str(self.experiment.config['TScan']['numAvgs']))
@@ -362,7 +416,7 @@ class TqcMainWindow(QWidget):
         self.setGeometry(self.left, self.top, self.width, self.height)   
 
         self.livePlot.setXRange(0, 5.3, padding = 0)
-        self.livePlot.setYRange(-250, -90, padding = 0)
+        self.livePlot.setYRange(-280, -120, padding = 0)
         self.colorLivePulse = (66,155,184, 145)
         self.colorlivePulseBackground = (66,155,184,145)
         self.colorAvgPulse = (200, 200, 200, 160)
@@ -379,6 +433,9 @@ class TqcMainWindow(QWidget):
         self.lEditRepeatNum.setAlignment(Qt.AlignCenter) 
         self.lEditWaferId.setAlignment(Qt.AlignCenter) 
         self.lEditSensorId.setAlignment(Qt.AlignCenter) 
+
+        self.plotDataContainer = {'currentAveragePulseFft': None,
+                                  'livePulseFft': None}       # Dictionary for plot items
 
 
     def loadIcons(self):
