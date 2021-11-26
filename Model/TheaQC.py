@@ -32,28 +32,28 @@ class TheaQC(Experiment):
             Initialise class attributes for QC application with default values.
         """
       
-        self.plotDataContainer = {'currentAveragePulseFft': None, 'livePulseFft': None}       # Dictionary for plot items
-        self.startOk = False                                                                  # Flag for TDS pulse start time validation
-        self.endOk = False                                                                    # Flag for TDS pulse end time validation
-        self.avgsOk = False                                                                   # Flag for required pulse averages validation
-        self.waferIdOk = False                                                                # Flag for wafer ID validation
-        self.sensorIdOk = False                                                               # Flag for sensor ID validation
-        self.repeatsOk = False                                                                # Flag for timelapse repeats validation
-        self.intervalOK = False                                                               # Flag for timelapse duration validation
-        self.tlapseSaveDir = None                                                             # Path for saving timelapse data
-        self.classification = None                                                            # Result of TDS pulse classification.
-        self.avgTask = None                                                                   # averaging task (manual - button event)
-        self.qcAvgTask = None                                                                 # QC averaging task (automatic - cartridge sensing)
-        self.timelapseTask = None                                                             # timelapse task (manual)
-        self.pulsePeaks = None                                                                # result of peak finding on TDS pulse for classification
-        self.qcParams = {}                                                                    # empty dictionary to hold qc parameters
-        self.qcComplete = False                                                               # Flag to track qc task completeion
-        self.qcResult = None                                                                  # QC result 
-        self.qcRunNum = 0                                                                     # tracking inspected sensors
-        self.qcRunning = False                                                                # Flag for QC running status
-        self.previousClassification = None                                                    # previous classification result 
-        self.qcResultsList = []                                                               # empty list to hold accumulated QC data on multiple sensors 
 
+        self.startOk = False                                  # Flag for TDS pulse start time validation
+        self.endOk = False                                    # Flag for TDS pulse end time validation
+        self.avgsOk = False                                   # Flag for required pulse averages validation
+        self.waferIdOk = False                                # Flag for wafer ID validation
+        self.sensorIdOk = False                               # Flag for sensor ID validation
+        self.repeatsOk = False                                # Flag for timelapse repeats validation
+        self.intervalOK = False                               # Flag for timelapse duration validation
+        self.tlapseSaveDir = None                             # Path for saving timelapse data
+        self.classification = None                            # Result of TDS pulse classification.
+        
+        self.qcAvgTask = None                                 # QC averaging task (automatic - cartridge sensing)
+        self.timelapseTask = None                             # timelapse task (manual)
+        self.pulsePeaks = None                                # result of peak finding on TDS pulse for classification
+        self.qcParams = {}                                    # empty dictionary to hold qc parameters
+        self.qcComplete = False                               # Flag to track qc task completeion
+        self.qcResult = None                                  # QC result 
+        self.qcRunNum = 0                                     # tracking inspected sensors
+        self.qcRunning = False                                # Flag for QC running status
+        self.previousClassification = None                    # previous classification result 
+        self.qcResultsList = []                               # empty list to hold accumulated QC data on multiple sensors 
+        self.stdRef = None                                    # Standard reference data for QC  
 
     def initAttribs(self):
 
@@ -83,12 +83,12 @@ class TheaQC(Experiment):
         self.sensorId = None                       # QC sensor ID
         self.tdsParams = {}                        # Empty dictionary to hold TDS pulse parameters
 
-        self.isAcquiring = False                   # Flag to check if pulses are being received
+
         self.pulseLatency = 1                      # time in seconds for processing TDS pulses
         self.currentAverageFft = None              # averaged pulse FFT
         self.frame = None                          # timelapse frame
         self.frames = None                         # list of timelapse frames  
-        self.keepRunning = False                   # Flag to keep runnning the processing of TDS pulses
+        
 
         self.chipsPerWafer = None                  # Parameter to trigger wafer ID change (not used)
         self.classificationDistance = None         # Pulse peak fitting parameters for classification- distance (see scipy.find_peaks())
@@ -115,7 +115,7 @@ class TheaQC(Experiment):
         """
             Load QC paramters for comparitive error checking against standard reference from config file.
         """
-
+        self.loadStandardRef()
         self.classificationDistance = self.config['Classification']['distance']
         self.classificationProminence = self.config['Classification']['prominence']
         self.classificationThreshold = self.config['Classification']['threshold']
@@ -149,10 +149,70 @@ class TheaQC(Experiment):
         self.timeAxis = self.timeAxis[:self.find_nearest(self.timeAxis, self.TdsWin)[0]+1]                   
         self.pulseAmp = self.pulseAmp[:self.find_nearest(self.timeAxis, self.TdsWin)[0]+1]
         self.pulseAmp = self.pulseAmp.copy()
+        # self.classifyTDS()                            # Live Cartridge sensing
+        # self.sensorUpdateReady.emit()
         self.freq, self.FFT = self.calculateFFT(self.timeAxis,self.pulseAmp)
-        print(self.FFT)
+        
         await asyncio.sleep(0.1)
         
+ 
+    
+    @asyncSlot()
+    async def startAveraging(self):
+
+        """
+            AsyncSlot coroutine to initiate the averaging task. Buttons are partially disabled during the process. 
+        """                
+
+        if self.device.avgTask is not None and  self.device.avgTask.done():
+                self.device.avgTask = None
+
+        await asyncio.sleep(0.01)
+        self.device.keepRunning = True
+        self.device.avgTask = asyncio.ensure_future(self.device.doAvgTask())
+        await asyncio.gather(self.device.avgTask)
+     
+
+    def loadStandardRef(self):
+
+        """
+            Load Standard Reference file for comparative QC
+        """
+
+
+        refPath = os.path.join(rscDir,"StandardReferences", self.config['QC']['stdRefFileName'])
+        print(refPath)
+        try:
+            stdRefData = MenloLoader([refPath]).data
+            self.stdRef = stdRefData
+            print("Standard reference loaded")
+            print(self.stdRef)
+        except:
+            print(f"[ERROR]: FileNotFound. No resource file called {self.config['QC']['stdRefFileName']}")
+
+
+
+    @asyncSlot()
+    async def cancelTasks(self):
+
+        """
+            Cancel async tasks. (software stop)
+        """
+        print("cancelling tasks")
+        try:
+            if self.timelapseTask is not None:
+                print("CANCELLING TLAPSE TASK")
+                self.timelapseTask.cancel()
+
+            if self.device.avgTask is not None:
+                print("CANCELLING AVG TASK")
+                self.device.avgTask.cancel()
+            if self.qcAvgTask is not None:
+                print("CANCELLING QC TASK")
+                self.qcAvgTask.cancel()                
+        except CancelledError:
+            print("Shutting down tasks")
+
 
 #*********************************************************************************************************************
 
