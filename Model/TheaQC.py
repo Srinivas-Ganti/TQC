@@ -17,6 +17,7 @@ class TheaQC(Experiment):
         
         super().__init__(loop, configFile)
         self.initialise()
+        
 
 
     def initialise(self):
@@ -196,7 +197,7 @@ class TheaQC(Experiment):
         """
             AsyncSlot coroutine to initiate the averaging task. Buttons are partially disabled during the process. 
         """                
-
+        self.device.setDesiredAverages(self.tdsParams['numAvgs'])
         if self.device.avgTask is not None and  self.device.avgTask.done():
                 self.device.avgTask = None
 
