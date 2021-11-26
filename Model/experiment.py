@@ -20,6 +20,7 @@ from Controller.TQC_controller import *
 
 class Experiment(QWidget):
 
+    configReady = pyqtSignal()
     
     def __init__(self, loop, config_file): 
 
@@ -30,6 +31,8 @@ class Experiment(QWidget):
         self.configLoaded = False
         self.loadConfig()
         self.loadDevice()
+        self.device.stop()
+        self.device.resetAveraging()
 
     
     def loadConfig(self):
@@ -57,10 +60,10 @@ class Experiment(QWidget):
         self.device.resetAveraging()
         self.device.setBegin(self.config['TScan']['begin'])
         self.device.setEnd(float(self.config['TScan']['begin']) + float(self.config['TScan']['window']))
-        self.device.setDesiredAverages(self.config['TScan']['numAvgs'])
+        self.device.setDesiredAverages(1) # default to single shot unless in averaging task
         
 
-    def saveAverageData(self, data):
+    def saveAverageData(self, data, path = "default"):
         
         """
             Saves data in the default folder specified in config.
@@ -80,20 +83,26 @@ class Experiment(QWidget):
     User time axis shift: {self.config['TScan']['begin']*-1}
     Time [ps]              THz Signal [mV]"""    
         
-        dataFolder = self.config['Export']['saveDir']
-        todayFolder = f'{datetime.today():%Y-%m-%d}'
-        savingFolder = os.path.join(dataFolder, todayFolder)
-        if not os.path.isdir(savingFolder):
-            os.makedirs(savingFolder)
+        if path == "default":
+            dataFolder = self.config['Export']['saveDir']
+        else:
+            dataFolder = path
+        try:
+            todayFolder = f'{datetime.today():%Y-%m-%d}'
+            savingFolder = os.path.join(dataFolder, todayFolder)
+            if not os.path.isdir(savingFolder):
+                os.makedirs(savingFolder)
 
-        filename = self.config['Export']['filename']
-        baseName = filename.split('.')[0]
-        ext = filename.split('.')[-1]
-        i = 1
-        while os.path.isfile(os.path.join(savingFolder, f'{baseName}_{i:04d}.{ext}')):
-            i+=1
-        dataFile = os.path.join(savingFolder, f'{baseName}_{i:04d}.{ext}')
-        np.savetxt(dataFile, tds, header = header)
+            filename = self.config['Export']['filename']
+            baseName = filename.split('.')[0]
+            ext = filename.split('.')[-1]
+            i = 1
+            while os.path.isfile(os.path.join(savingFolder, f'{baseName}_{i:04d}.{ext}')):
+                i+=1
+            dataFile = os.path.join(savingFolder, f'{baseName}_{i:04d}.{ext}')
+            np.savetxt(dataFile, tds, header = header)
+        except:
+            print("Invalid file path to export averaging data")
 
 
     def calculateFFT(self, time, amp):
