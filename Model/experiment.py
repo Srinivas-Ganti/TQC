@@ -31,10 +31,10 @@ class Experiment(QWidget):
         self.configLoaded = False
         self.loadConfig()
         self.loadDevice()
-        self.device.stop()
-        self.device.resetAveraging()
+        self.device.stop()            # Always begin in "Stop" state
+        self.device.resetAveraging()  # Always begin with averaging buffer cleared
+        
 
-    
     def loadConfig(self):
         
         """
@@ -50,13 +50,14 @@ class Experiment(QWidget):
 
     def loadDevice(self):
 
-        
         self.device = Device(self.loop)
         self.initialise()
-
+        print("DEVICE LOADED")
+    
     
     def initialise(self):
 
+        print("INITIALISING FROM BASE EXPERIMENT")
         self.device.resetAveraging()
         self.device.setBegin(self.config['TScan']['begin'])
         self.device.setEnd(float(self.config['TScan']['begin']) + float(self.config['TScan']['window']))
