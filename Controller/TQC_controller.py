@@ -42,6 +42,7 @@ class Device(QWidget):
             self.status = None
             self.pulseReady.connect(self.processPulses)   
             self.scanControl.statusChanged.connect(self._statusChanged) 
+            print("DEVICE INITIALISED")
         else:
             print("CLIENT ERROR:")
 
@@ -170,7 +171,6 @@ class Device(QWidget):
         """
 
         try:
-            # self.resetAveraging()
             await self.scanControl.start()
             print("> [SCANCONTROL] Opening Detector") 
             

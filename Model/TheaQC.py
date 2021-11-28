@@ -19,7 +19,6 @@ class TheaQC(Experiment):
         self.initialise()
         
 
-
     def initialise(self):
 
         if self.configLoaded:
@@ -188,9 +187,6 @@ class TheaQC(Experiment):
             print("STD REF LOADED")
             
 
-            
-        
-
     @asyncSlot()
     async def startAveraging(self):
 
@@ -198,14 +194,16 @@ class TheaQC(Experiment):
             AsyncSlot coroutine to initiate the averaging task. Buttons are partially disabled during the process. 
         """                
         self.device.setDesiredAverages(self.tdsParams['numAvgs'])
+        await asyncio.sleep(0.1)
         if self.device.avgTask is not None and  self.device.avgTask.done():
                 self.device.avgTask = None
+                
 
         await asyncio.sleep(0.01)
         self.device.keepRunning = True
         self.device.avgTask = asyncio.ensure_future(self.device.doAvgTask())
         await asyncio.gather(self.device.avgTask)
-     
+        
 
     def loadStandardRef(self):
 
@@ -223,7 +221,6 @@ class TheaQC(Experiment):
             print(self.stdRef)
         except:
             print(f"[ERROR]: FileNotFound. No resource file called {self.config['QC']['stdRefFilePath']}")
-
 
 
     @asyncSlot()

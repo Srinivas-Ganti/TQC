@@ -5,6 +5,7 @@ baseDir =  os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 modelDir = os.path.join(baseDir, "Model")
 viewDir = os.path.join(baseDir, "View")
 uiDir = os.path.join(viewDir, "Designer")
+configDir = None
 
 sys.path.append(baseDir)
 sys.path.append(modelDir)
@@ -55,7 +56,8 @@ class TqcMainWindow(QWidget):
         # self.btnStartTimelapse.clicked.connect(self.startTimelapse)
         # self.btnStartQC.clicked.connect(self.startQC)
         # self.btnFinishQC.clicked.connect(self.finishQC)
-        # self.btnNewStdRef.clicked.connect(self.measureStandardRef)
+        self.btnNewStdRef.clicked.connect(self.experiment.measureStandardRef)
+        self.btnNewStdRef.clicked.connect(self.measureStandardRef)
         self.dataUpdateReady.connect(self.updatePlot)
         # self.sensorUpdateReady.connect(self.checkNextSensor)
 
@@ -68,11 +70,27 @@ class TqcMainWindow(QWidget):
         self.lEditSensorId.editingFinished.connect(self.validateEditSensorId)
 
 
+    @asyncSlot()
+    async def measureStandardRef(self):
+        
+        await asyncio.sleep(0.01)
+        self.message("> [MESSAGE]: Recording new standard reference for QC . . .")
+        self.btnNewStdRef.setEnabled(False)
+        self.btnStartAveraging.clicked.emit()
+        self.message(f"> [MESSAGE]: RELOADING CONFIG, updating internal reference")
+        self.btnStartTimelapse.setEnabled(True)
+    	
+
+
+
+
+
 
     @asyncSlot()
     async def startAveraging(self, data):
 
         """"Update averaging progress bar"""
+        
         await asyncio.sleep(0.01)
         self.progAvg.setValue(int(self.experiment.device.scanControl.currentAverages/\
                                  self.experiment.device.scanControl.desiredAverages*100))
@@ -100,6 +118,7 @@ class TqcMainWindow(QWidget):
         else:
             self.btnStartQC.setEnabled(False)
             self.btnNewStdRef.setEnabled(False)
+
         if self.experiment.device.isAcquiring:
             if self.plotDataContainer['livePulseFft'] is None :
                 self.plotDataContainer['livePulseFft'] = self.plot(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
@@ -237,7 +256,7 @@ class TqcMainWindow(QWidget):
             print("TDS Inputs accepted")
             self.experiment.device.setBegin(self.experiment.startTime)
             self.experiment.device.setEnd(self.experiment.endTime)
-            self.experiment.device.setDesiredAverages(self.experiment.numAvgs)
+            # self.experiment.device.setDesiredAverages(self.experiment.numAvgs)
             self.btnStart.setEnabled(True)
             self.btnStartAveraging.setEnabled(True)
             self.btnResetAvg.setEnabled(True)
@@ -285,12 +304,12 @@ class TqcMainWindow(QWidget):
             self.experiment.avgsOk = True
             self.experiment.numAvgs = int(self.lEditTdsAvgs.text())
             self.experiment.tdsParams['numAvgs'] = self.experiment.numAvgs
-            self.experiment.device.setDesiredAverages(self.experiment.tdsParams['numAvgs'])
+            
         else:
             print("[ERROR] InvalidInput: Setting default config value")
             self.experiment.avgsOK = False
             self.lEditTdsAvgs.setText(str(self.experiment.config['TScan']['numAvgs']))
-            self.experiment.device.setDesiredAverages(self.experiment.config['TScan']['numAvgs'])
+            
 
         
     def validateEditInterval(self):
