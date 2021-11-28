@@ -39,7 +39,9 @@ class TqcMainWindow(QWidget):
         
         self.experiment.device.pulseReady.connect(self.processPulses)
         self.experiment.device.pulseReady.connect(self.experiment.processPulses)
+
         self.experiment.device.pulseReady.connect(self.startAveraging)
+        self.btnStartAveraging.clicked.connect(self.experiment.startAveraging)
 
         self.experiment.device.dataUpdateReady.connect(self.experiment.device.done)
         self.btnStart.clicked.connect(self.experiment.device.start)
@@ -50,7 +52,7 @@ class TqcMainWindow(QWidget):
         self.btnResetAvg.clicked.connect(self.experiment.device.resetAveraging)
         self.btnResetAvg.clicked.connect(self.resetAveraging)
 
-        self.btnStartAveraging.clicked.connect(self.experiment.startAveraging)
+        
         
 
         # self.btnStartTimelapse.clicked.connect(self.startTimelapse)
@@ -256,7 +258,6 @@ class TqcMainWindow(QWidget):
             print("TDS Inputs accepted")
             self.experiment.device.setBegin(self.experiment.startTime)
             self.experiment.device.setEnd(self.experiment.endTime)
-            # self.experiment.device.setDesiredAverages(self.experiment.numAvgs)
             self.btnStart.setEnabled(True)
             self.btnStartAveraging.setEnabled(True)
             self.btnResetAvg.setEnabled(True)
