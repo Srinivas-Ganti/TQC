@@ -10,8 +10,11 @@ sys.path.append(baseDir)
 from Model.experiment import *
 from MenloLoader import MenloLoader
 
+from scipy.signal import find_peaks
 
 class TheaQC(Experiment):
+
+    sensorUpdateReady = pyqtSignal()
     
     def __init__(self, loop = None, configFile = None):
         
@@ -57,6 +60,7 @@ class TheaQC(Experiment):
         self.qcResultsList = []                               # empty list to hold accumulated QC data on multiple sensors 
         self.stdRef = None                                    # Standard reference data for QC  
 
+
     def initAttribs(self):
 
         """
@@ -91,7 +95,6 @@ class TheaQC(Experiment):
         self.frame = None                          # timelapse frame
         self.frames = None                         # list of timelapse frames  
         
-
         self.chipsPerWafer = None                  # Parameter to trigger wafer ID change (not used)
         self.classificationDistance = None         # Pulse peak fitting parameters for classification- distance (see scipy.find_peaks())
         self.classificationProminence = None
@@ -136,6 +139,42 @@ class TheaQC(Experiment):
             print(f"QC data will be saved in: {self.qcSaveDir}")
 
 
+    def classifyTDS(self):
+
+        """
+            Classify the latest pulse data as "Air" or "Sensor".
+        """
+
+        self.pulsePeaks = {}
+        isAir, isSensor = [0 for i in range(2)]
+        start = self.find_nearest(self.timeAxis, self.config["Classification"]["tdsInspectStart"])[0]
+        end =  self.find_nearest(self.timeAxis, self.config["Classification"]["tdsInspectEnd"])[0]
+        self.pulsePeaks['distance'] = find_peaks(self.pulseAmp[start:end], distance = self.classificationDistance)
+        self.pulsePeaks['width'] = find_peaks(self.pulseAmp[start:end], width = self.classificationWidth)
+        
+        self.pulsePeaks['prominence'] = find_peaks(self.pulseAmp[start:end], prominence = self.classificationProminence)
+
+        if self.find_nearest(self.pulsePeaks['distance'][0], 210)[1]  > 200: # checking array indices not values
+            isSensor += 1 
+        else:
+            isAir += 1   
+        if len(self.pulsePeaks['width'][0]) > 4:
+            isSensor += 1     
+        else:
+            isAir += 1
+        if len(self.pulsePeaks['prominence'][0]) > 3:
+            isAir += 1    
+        else:
+            isSensor +=1  
+        sensorUpdate = {'isSensor': isSensor, 'isAir': isAir}
+
+        if sensorUpdate['isAir'] < sensorUpdate['isSensor']:
+            self.classification = "Sensor"
+        if sensorUpdate['isAir'] > sensorUpdate['isSensor']:
+            self.classification = "Air"
+        self.sensorUpdateReady.emit()  
+
+
     @asyncSlot()
     async def processPulses(self,data):
 
@@ -150,7 +189,7 @@ class TheaQC(Experiment):
         self.timeAxis = self.timeAxis[:self.find_nearest(self.timeAxis, self.TdsWin)[0]+1]                   
         self.pulseAmp = self.pulseAmp[:self.find_nearest(self.timeAxis, self.TdsWin)[0]+1]
         self.pulseAmp = self.pulseAmp.copy()
-        # self.classifyTDS()                            # Live Cartridge sensing
+        self.classifyTDS()                            # Live Cartridge sensing
         # self.sensorUpdateReady.emit()
         self.freq, self.FFT = self.calculateFFT(self.timeAxis,self.pulseAmp)
         
