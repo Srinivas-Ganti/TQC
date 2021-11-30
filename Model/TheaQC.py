@@ -10,7 +10,7 @@ configDir = os.path.join(baseDir, "Model")  # if keeping in same dir as model
 sys.path.append(baseDir)
 
 from Model.experiment import *
-from Model import ur
+from Resources import ur
 from MenloLoader import MenloLoader
 
 from scipy.signal import find_peaks
@@ -167,7 +167,7 @@ class TheaQC(Experiment):
                             self.qcRunNum +=1
                             self.previousClassification = "Sensor"    
                             self.qcUpdateReady.emit() # announce results
-                            
+
                             rawExportData = np.vstack([self.timeAxis, self.avgPulseAmp]).T
                             header = f"""THEA QC - RAM Group GmbH, powered by Menlo Systems\nProgram Version 1.04\nAverage over {self.numAvgs} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}
         User time axis shift: {self.config['TScan']['begin']*-1}, QC Parameters: {self.qcParams}
