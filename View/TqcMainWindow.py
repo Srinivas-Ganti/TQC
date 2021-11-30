@@ -39,25 +39,27 @@ class TqcMainWindow(QWidget):
         
         self.experiment.device.pulseReady.connect(self.processPulses)
         self.experiment.device.pulseReady.connect(self.experiment.processPulses)
-
-        self.experiment.device.pulseReady.connect(self.startAveraging)
-        self.btnStartAveraging.clicked.connect(self.experiment.startAveraging)
-
         self.experiment.device.dataUpdateReady.connect(self.experiment.device.done)
+        self.experiment.device.pulseReady.connect(self.startAveraging)
+        self.experiment.qcUpdateReady.connect(self.qcResult)
+
+        self.livePlot.scene().sigMouseMoved.connect(self.mouseMoved)
+        self.dataUpdateReady.connect(self.updatePlot)
+        
+        self.btnStartAveraging.clicked.connect(self.experiment.startAveraging)
         self.btnStart.clicked.connect(self.experiment.device.start)
         self.btnStop.clicked.connect(self.experiment.device.stop) 
         self.btnStop.clicked.connect(self.stop) 
         self.btnStop.clicked.connect(self.experiment.cancelTasks)
-        self.livePlot.scene().sigMouseMoved.connect(self.mouseMoved)
-
+        
         self.btnResetAvg.clicked.connect(self.experiment.device.resetAveraging)
         self.btnResetAvg.clicked.connect(self.resetAveraging)
         # self.btnStartTimelapse.clicked.connect(self.startTimelapse)
-        # self.btnStartQC.clicked.connect(self.startQC)
-        # self.btnFinishQC.clicked.connect(self.finishQC)
+        self.btnStartQC.clicked.connect(self.startQC)
+        self.btnFinishQC.clicked.connect(self.finishQC)
         self.btnNewStdRef.clicked.connect(self.experiment.measureStandardRef)
         self.btnNewStdRef.clicked.connect(self.measureStandardRef)
-        self.dataUpdateReady.connect(self.updatePlot)
+        
         # self.sensorUpdateReady.connect(self.checkNextSensor)
         self.experiment.sensorUpdateReady.connect(self.classifyTDS)
         self.lEditTdsStart.editingFinished.connect(self.validateEditStart)
@@ -70,7 +72,40 @@ class TqcMainWindow(QWidget):
 
 
     @asyncSlot()
+    async def startQC(self):
+        
+        """GUI button states during QC"""
+        
+        self.disableButtons()
+        self.btnFinishQC.setEnabled(True)
+
+        if self.experiment.stdRef is not None and not self.experiment.qcComplete:
+            if self.experiment.qcRunNum == 0:
+                self.message(f'> [QC]: Starting {datetime.now().strftime("%d-%m-%y %H:%M:%S")}')
+            
+            self.lblQcStatusIcon.setPixmap(QPixmap("Icons/arrow-circle-double.png"))
+            self.lblQcStatusIcon.setScaledContents(True)
+            self.qCcurrentMsg.setText("Result: Processing . . . ") 
+
+            if isinstance(self.experiment.numAvgs, int):
+                self.lEditTdsAvgs.setText(str(self.experiment.numAvgs))
+            while  not self.experiment.qcAvgTask.done():
+                asyncio.sleep(0.1)
+            if self.experiment.qcAvgTask.done():
+                stdRefPlot = self.plot(self.experiment.freq, 20*np.log(np.abs(self.experiment.stdRef.FFT[0])))
+                stdRefPlot.curve.setPen(color = self.colorstdRef, width = self.averagePlotLineWidth)
+
+
+    @asyncSlot()
+    async def finishQC(self):
+        pass
+
+
+    @asyncSlot()
     async def measureStandardRef(self):
+
+        """GUI button states during std reference measurement"""
+
         
         await asyncio.sleep(0.01)
         self.message("> [MESSAGE]: Recording new standard reference for QC . . .")
@@ -79,6 +114,28 @@ class TqcMainWindow(QWidget):
         self.message(f"> [MESSAGE]: RELOADING CONFIG, updating internal reference")
         self.btnStartTimelapse.setEnabled(True)
     	
+
+    @asyncSlot()
+    async def qcResult(self):
+
+        """Update graphics with latest QC results"""
+
+        if self.experiment.qcResult == "FAIL":
+            self.plotDataContainer['currentAveragePulseFft'].curve.setPen(color = self.colorFail, width = self.averagePlotLineWidth)
+            self.lblQcStatusIcon.setPixmap(QPixmap("Icons/cross-circle.png"))
+            self.lblQcStatusIcon.setScaledContents(True)
+            self.qCcurrentMsg.setText("Result: QC FAIL")
+            self.qCcurrentMsg.setText("Result: QC FAIL")
+            self.message(f"{self.waferId}_{self.sensorId} : {self.qcResult}")
+         
+        elif self.experiment.qcResult == "PASS":
+            
+            self.plotDataContainer['currentAveragePulseFft'].curve.setPen(color = self.colorPass, width = self.averagePlotLineWidth)
+            self.lblQcStatusIcon.setPixmap(QPixmap("Icons/tick-circle.png"))
+            self.lblQcStatusIcon.setScaledContents(True)
+            self.qCcurrentMsg.setText("Result: QC PASS")
+            self.message(f"{self.waferId}_{self.sensorId} : {self.qcResult}")
+
 
     @asyncSlot()
     async def classifyTDS(self):
