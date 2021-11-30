@@ -51,11 +51,11 @@ class Experiment(QWidget):
     def loadDevice(self):
 
         self.device = Device(self.loop)
-        self.initialise()
+        self.initialiseModel()
         print("DEVICE LOADED")
     
     
-    def initialise(self):
+    def initialiseModel(self):
 
         print("INITIALISING FROM BASE EXPERIMENT")
         self.device.resetAveraging()
@@ -160,10 +160,7 @@ class Experiment(QWidget):
         idx = (np.abs(array - value)).argmin()
         return idx, array[idx] 
 
-        
-
-
-
+  
 
 #***************************************************************
 
