@@ -146,7 +146,7 @@ class Device(QWidget):
             if not self.isAcquiring:
                 self.start()            
 
-            print(f"Averaging: {self.scanControl.currentAverages}/{self.scanControl.desiredAverages}\r")
+            # print(f"Averaging: {self.scanControl.currentAverages}/{self.scanControl.desiredAverages}\r")
             if self.scanControl.currentAverages==self.scanControl.desiredAverages:
                 avgData = self.pulseData
                 self.resetAveraging()
@@ -171,12 +171,18 @@ class Device(QWidget):
         """
 
         try:
+            
             await self.scanControl.start()
             print("> [SCANCONTROL] Opening Detector") 
             
             self.isAcquiring = True    
-            print("> [SCANCONTROL] Receiving Pulses . . . ")    
-            
+            print("> [SCANCONTROL] Receiving Pulses . . . ")   
+
+            if self.avgTask is not None and self.avgTask.done():
+                self.setDesiredAverages(1)
+
+            print("Default/ non task avgs set to single shot")
+
         except AttributeError:
             print("> [ERROR] InitalisationError: Menlo ScanControl is not ready. Please follow normal startup using Menlo ScanControl before launching the QC app")
 
