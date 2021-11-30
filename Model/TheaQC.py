@@ -1,6 +1,8 @@
 import sys
 import os
 
+from pint.errors import UndefinedUnitError
+
 baseDir =  os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 rscDir = os.path.join(baseDir, "Resources")
 # configDir  = os.path.join(baseDir, "Config") # use only if making a separate config dir
@@ -8,13 +10,16 @@ configDir = os.path.join(baseDir, "Model")  # if keeping in same dir as model
 sys.path.append(baseDir)
 
 from Model.experiment import *
+from Model import ur
 from MenloLoader import MenloLoader
 
 from scipy.signal import find_peaks
 
+
 class TheaQC(Experiment):
 
     sensorUpdateReady = pyqtSignal()
+    qcUpdateReady = pyqtSignal()
     
     def __init__(self, loop = None, configFile = None):
         
@@ -29,6 +34,7 @@ class TheaQC(Experiment):
             self.initResources()
             self.mLoader = MenloLoader([])          # fileLoader object
             self.TdsWin = self.config['TScan']['window']
+
 
 
     def initResources(self):
@@ -103,6 +109,89 @@ class TheaQC(Experiment):
         self.stdRef = None                         # Standard reference TDS pulse data
 
 
+    @asyncSlot()
+    async def startQC(self):
+
+        """Comparitive QC against standard reference.As sensors are being 
+            detected and measured, the QC results are updated and files are exported to the destination directory
+            as specified in the config file."""
+
+        self.qcRunning = True
+        if self.stdRef is not None and not self.qcComplete:
+            start_idx = self.find_nearest(self.freq, self.config['QC']['lowerFreqBound'])[0]
+            end_idx =  self.find_nearest(self.freq, self.config['QC']['upperFreqBound'])[0]
+            stdRefAmp =  self.stdRef.amp[0]
+            _, stdRefFFT = self.calculateFFT(self.timeAxis, stdRefAmp)
+            stdRefFFT = stdRefFFT[start_idx: end_idx]
+            f = self.freq[start_idx: end_idx]
+           
+            if self.classification == "Sensor":
+
+                self.numAvgs = self.config['QC']['qcAverages']
+                if isinstance(self.numAvgs, int):
+                    self.setDesiredAverages(desiredAvgs = self.numAvgs)
+                    print("Setting averages for QC")
+                    self.keepRunning = True
+                    print("Waiting / handling time . . . ")
+                    await asyncio.sleep(self.config['QC']['handlingTime'])
+                    print("QC Resuming . . . Verirying classification.")
+                    if self.classification == "Sensor":
+                        self.qcAvgTask = asyncio.ensure_future(self.startAveraging)
+                        asyncio.gather(self.qcAvgTask)
+                        while not self.qcAvgTask.done():
+                            await asyncio.sleep(1)
+                        if self.qcAvgTask.done():
+                            currentDatetime = datetime.now()
+                            sensorAvgFFT = self.device.avgResult[start_idx: end_idx]
+                            diff = 20*np.log(np.abs(stdRefFFT)) - 20*np.log(np.abs(sensorAvgFFT))
+                            err = 0 
+                            for j,k in zip(diff, f):
+                                if abs(j) > self.config['QC']['allowedErrordB']:                # <<<<<<<<< QC criterion
+                                    err+=1
+                            if err > self.config['QC']['maxViolations']:                  # <<<<<<<<< QC criterion
+                                print("QC FAIL")
+                                self.qcResult = "FAIL"
+                            else:
+                                print("QC PASS")
+                                self.qcResult = "PASS"
+                            resonanceMin = self.findResonanceMinima()
+
+                            
+
+                            self.qcResultsList.append({'datetime': currentDatetime.strftime("%d-%m-%y %H:%M:%S"),
+                                                    'sensorId':self.sensorId,
+                                                    'waferId': self.waferId,
+                                                    'qcResult': self.qcResult,
+                                                    'resonance': resonanceMin})
+
+                            self.qcRunNum +=1
+                            self.previousClassification = "Sensor"    
+                            self.qcUpdateReady.emit() # announce results
+                            
+                            rawExportData = np.vstack([self.timeAxis, self.avgPulseAmp]).T
+                            header = f"""THEA QC - RAM Group GmbH, powered by Menlo Systems\nProgram Version 1.04\nAverage over {self.numAvgs} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}
+        User time axis shift: {self.config['TScan']['begin']*-1}, QC Parameters: {self.qcParams}
+        Time [ps]              THz Signal [mV]"""
+                            base_name = f"""{currentDatetime.strftime("%d%m%yT%H%M%S")}_WID_{self.waferId}_SN_{self.sensorId}_{self.qcResult}_Reference"""
+                            saveWaferDir = os.path.join(self.qcSaveDir, str(datetime.now().date()) , self.waferId)
+                            if not os.path.isdir(saveWaferDir):
+                                os.makedirs(os.path.join(saveWaferDir))
+                                data_file = os.path.join(saveWaferDir.replace("/","\\"), f'{base_name}.txt')
+                                np.savetxt(data_file, rawExportData, header = header, delimiter = '\t' )  
+                            else:                        
+                                data_file = os.path.join(saveWaferDir.replace("/","\\"), f'{base_name}.txt')
+                                np.savetxt(data_file, rawExportData, header = header, delimiter = '\t' )  
+                        else:
+                            await asyncio.sleep(0.1)
+            elif self.classification == "Air":
+                self.previousClassification = "Air"
+
+            
+            
+
+            
+
+
     def loadDcBkg(self):
 
         """
@@ -137,6 +226,35 @@ class TheaQC(Experiment):
         else:
             self.qcSaveDir = qcSaveDir
             print(f"QC data will be saved in: {self.qcSaveDir}")
+        try:
+            handlingTime = self.config['QC']['handlingTime']
+            if isinstance(handlingTime, int):
+                handlingTime = handlingTime*ur("s")
+            elif isinstance(ur(self.config['QC']['handlingTime']), ur.Quantity) and ur(handlingTime).units in ["second"]:
+                self.handlingTime = ur(handlingTime).m_as("second")
+            print(f"QC cartridge handling time set to : {self.handlingTime}s")
+        except UndefinedUnitError:
+            self.handlingTime = 1
+            print("CONFIG ERROR: ensure handling time units in seconds,\
+                   or unitless, setting handling time to: 1s")
+            
+
+    def loadStandardRef(self):
+
+        """
+            Load Standard Reference file for comparative QC
+        """
+
+
+        refPath = os.path.join(rscDir,"StandardReferences", self.config['QC']['stdRefFilePath'])
+        print(refPath)
+        try:
+            stdRefData = MenloLoader([refPath]).data
+            self.stdRef = stdRefData
+            print("Standard reference loaded")
+            print(self.stdRef)
+        except:
+            print(f"[ERROR]: FileNotFound. No resource file called {self.config['QC']['stdRefFilePath']}")
 
 
     def classifyTDS(self):
@@ -237,29 +355,11 @@ class TheaQC(Experiment):
         if self.device.avgTask is not None and  self.device.avgTask.done():
                 self.device.avgTask = None
                 
-
         await asyncio.sleep(0.01)
         self.device.keepRunning = True
         self.device.avgTask = asyncio.ensure_future(self.device.doAvgTask())
         await asyncio.gather(self.device.avgTask)
         
-
-    def loadStandardRef(self):
-
-        """
-            Load Standard Reference file for comparative QC
-        """
-
-
-        refPath = os.path.join(rscDir,"StandardReferences", self.config['QC']['stdRefFilePath'])
-        print(refPath)
-        try:
-            stdRefData = MenloLoader([refPath]).data
-            self.stdRef = stdRefData
-            print("Standard reference loaded")
-            print(self.stdRef)
-        except:
-            print(f"[ERROR]: FileNotFound. No resource file called {self.config['QC']['stdRefFilePath']}")
 
 
     @asyncSlot()
