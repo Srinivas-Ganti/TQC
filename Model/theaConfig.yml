@@ -20,6 +20,7 @@ QC:
   stdRefFilePath: C:\Users\TeraSmart\Documents\API_MenloSystem\RamGlobalSystem\LiveQC\rWatchDog\QChecker\Resources\StandardReferences\180821T162000_WID_W0_SN_3_STANDARD_Reference.txt
   upperFreqBound: 0.9
   waferId: W0000
+  
 Spectrometer:
   name: TERASMART
   systemNum: 0
