@@ -46,15 +46,12 @@ class TqcMainWindow(QWidget):
         self.experiment.device.dataUpdateReady.connect(self.experiment.device.done)
         self.btnStart.clicked.connect(self.experiment.device.start)
         self.btnStop.clicked.connect(self.experiment.device.stop) 
+        self.btnStop.clicked.connect(self.stop) 
         self.btnStop.clicked.connect(self.experiment.cancelTasks)
         self.livePlot.scene().sigMouseMoved.connect(self.mouseMoved)
 
         self.btnResetAvg.clicked.connect(self.experiment.device.resetAveraging)
         self.btnResetAvg.clicked.connect(self.resetAveraging)
-
-        
-        
-
         # self.btnStartTimelapse.clicked.connect(self.startTimelapse)
         # self.btnStartQC.clicked.connect(self.startQC)
         # self.btnFinishQC.clicked.connect(self.finishQC)
@@ -62,7 +59,7 @@ class TqcMainWindow(QWidget):
         self.btnNewStdRef.clicked.connect(self.measureStandardRef)
         self.dataUpdateReady.connect(self.updatePlot)
         # self.sensorUpdateReady.connect(self.checkNextSensor)
-
+        self.experiment.sensorUpdateReady.connect(self.classifyTDS)
         self.lEditTdsStart.editingFinished.connect(self.validateEditStart)
         self.lEditTdsEnd.setReadOnly(True)
         self.lEditTdsAvgs.editingFinished.connect(self.validateEditAverages)
@@ -83,9 +80,38 @@ class TqcMainWindow(QWidget):
         self.btnStartTimelapse.setEnabled(True)
     	
 
+    @asyncSlot()
+    async def classifyTDS(self):
 
+        await asyncio.sleep(0.1)
+        if self.experiment.classification == "Sensor":
+        
+            self.lblClassResultIcon.setPixmap(QPixmap("Icons/Sensor.png"))
+            self.lblClassResultIcon.setScaledContents(True)  
+            self.lblClassResult.setText("Result: Sensor")  
+            
+        if self.experiment.classification == "Air":
+            self.lblClassResultIcon.setPixmap(QPixmap("Icons/Air.png"))
+            self.lblClassResultIcon.setScaledContents(True)     
+            self.lblClassResult.setText("Result: Air")   
+           
 
+    @asyncSlot()
+    async def stop(self):
 
+        """Reset icons to offline state"""
+
+        self.lblClassResultIcon.setPixmap(QPixmap("Icons/status-offline.png"))
+        self.lblClassResultIcon.setScaledContents(True)  
+        self.lblClassResult.setText("Result: Not available") 
+
+        self.lblQcStatusIcon.setPixmap(QPixmap("Icons/status-offline.png"))
+        self.lblQcStatusIcon.setScaledContents(True)
+        self.qCcurrentMsg.setText("Result: not available")
+        await asyncio.sleep(0.1)
+        
+        self.enableButtons()
+        self.btnStartQC.setEnabled(False)
 
 
     @asyncSlot()
@@ -113,6 +139,7 @@ class TqcMainWindow(QWidget):
         """"GUI button state management during data processing"""
 
         await asyncio.sleep(0.01)
+        
         if not self.experiment.qcRunning and not self.experiment.timelapseRunning:
             self.btnStartQC.setEnabled(True)
             if self.experiment.classification == "Sensor":
@@ -244,8 +271,7 @@ class TqcMainWindow(QWidget):
         self.lEditWaferId.editingFinished.emit()
         self.loadQC()
         self.lEditSensorId.setText(str(self.experiment.config['QC']['sensorId']))
-        self.lEditSensorId.editingFinished.emit() 
-        
+        self.lEditSensorId.editingFinished.emit()         
 
 
     def loadTDSParams(self):
