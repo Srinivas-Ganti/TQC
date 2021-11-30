@@ -40,6 +40,7 @@ class Device(QWidget):
             self.pulseData = None
             self.avgTask = None                        # averaging task 
             self.status = None
+            self.avgResult = None                      # result of averaging task
             self.pulseReady.connect(self.processPulses)   
             self.scanControl.statusChanged.connect(self._statusChanged) 
             print("DEVICE INITIALISED")
@@ -142,7 +143,6 @@ class Device(QWidget):
         
         if self.avgTask is not None:
             self.resetAveraging()
-
             if not self.isAcquiring:
                 self.start()            
 
@@ -217,7 +217,7 @@ class Device(QWidget):
     def done(self, data):
 
         print("**********************Averaging Done**************************")
-        print(data)
+        self.avgResult = data
 
 
     @asyncSlot()
