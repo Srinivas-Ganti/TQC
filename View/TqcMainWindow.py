@@ -519,7 +519,7 @@ class TqcMainWindow(QWidget):
         self.setGeometry(self.left, self.top, self.width, self.height)   
 
         self.livePlot.setXRange(0, 5.3, padding = 0)
-        self.livePlot.setYRange(-280, -120, padding = 0)
+        self.livePlot.setYRange(-280, -100, padding = 0)
         self.colorLivePulse = (66,155,184, 145)
         self.colorlivePulseBackground = (66,155,184,145)
         self.colorAvgPulse = (200, 200, 200, 160)
