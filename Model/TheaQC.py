@@ -271,15 +271,16 @@ class TheaQC(Experiment):
         self.pulsePeaks['width'] = find_peaks(self.pulseAmp[start:end], width = self.classificationWidth)
         
         self.pulsePeaks['prominence'] = find_peaks(self.pulseAmp[start:end], prominence = self.classificationProminence)
-
-        if self.find_nearest(self.pulsePeaks['distance'][0], 210)[1]  > 200: # checking array indices not values
+        self.pulsePeaks['threshold'] = find_peaks(self.pulseAmp[start:end], threshold = self.classificationThreshold)
+        if self.find_nearest(self.pulsePeaks['distance'][0], 510)[1]  > 510: # checking array indices not values
             isSensor += 1 
         else:
             isAir += 1   
-        if len(self.pulsePeaks['width'][0]) > 4:
-            isSensor += 1     
+ 
+        if len(self.pulsePeaks['threshold'][0]) > 5:
+            isAir += 1     
         else:
-            isAir += 1
+            isSensor += 1
         if len(self.pulsePeaks['prominence'][0]) > 3:
             isAir += 1    
         else:
@@ -308,7 +309,6 @@ class TheaQC(Experiment):
         self.pulseAmp = self.pulseAmp[:self.find_nearest(self.timeAxis, self.TdsWin)[0]+1]
         self.pulseAmp = self.pulseAmp.copy()
         self.classifyTDS()                            # Live Cartridge sensing
-        # self.sensorUpdateReady.emit()
         self.freq, self.FFT = self.calculateFFT(self.timeAxis,self.pulseAmp)
         
         await asyncio.sleep(0.1)
