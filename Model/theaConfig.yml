@@ -1,10 +1,10 @@
 Classification:
   distance: 80
   prominence: 0.25
-  tdsInspectEnd: 35
-  tdsInspectStart: 14
+  tdsInspectEnd: 100
+  tdsInspectStart: 50
   threshold: 0.005
-  width: 19
+  width: 500
 Export:
   filename: data.dat
   saveDir: C:\Users\TeraSmart\Documents\API_MenloSystem\RamGlobalSystem\TQC\Export
@@ -31,3 +31,10 @@ TScan:
 Timelapse:
   interval: 5s
   repeats: 3
+
+
+Temp:
+  airFileNames: 
+  - Air_singleshot.txt
+  sensorFileNames: 
+  - F1_singleshot.txt
