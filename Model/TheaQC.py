@@ -62,6 +62,7 @@ class TheaQC(Experiment):
         self.qcResult = None                                  # QC result 
         self.qcRunNum = 0                                     # tracking inspected sensors
         self.qcRunning = False                                # Flag for QC running status
+        self.qcNumAvgs = None                                 # number of averages for QC
         self.previousClassification = None                    # previous classification result 
         self.qcResultsList = []                               # empty list to hold accumulated QC data on multiple sensors 
         self.stdRef = None                                    # Standard reference data for QC  
@@ -95,7 +96,6 @@ class TheaQC(Experiment):
         self.sensorId = None                       # QC sensor ID
         self.tdsParams = {}                        # Empty dictionary to hold TDS pulse parameters
 
-
         self.pulseLatency = 1                      # time in seconds for processing TDS pulses
         self.currentAverageFft = None              # averaged pulse FFT
         self.frame = None                          # timelapse frame
@@ -108,89 +108,113 @@ class TheaQC(Experiment):
         self.classificationThreshold = None
         self.stdRef = None                         # Standard reference TDS pulse data
 
+        self.qcStep = None
 
+    
     @asyncSlot()
-    async def startQC(self):
+    async def doQC(self):
 
         """Comparitive QC against standard reference.As sensors are being 
             detected and measured, the QC results are updated and files are exported to the destination directory
             as specified in the config file."""
+        
+        if self.qcRunning and self.qcStep is None:
+            self.qcStep = 0
+            if self.previousClassification is None and self.classification == 'Sensor' and self.qcAvgTask is None:
+               self.device.avgTask = None
+               print("Sensor Detected. Double checking . . .")
+               await asyncio.sleep(self.handlingTime)
+               if self.classification == "Sensor":
+                   print("Sensor confirmed, begin processing cartridge")
+                   await self.startAveraging(self.qcNumAvgs)
+                   await asyncio.sleep(0.1)
+                   
+
+
+               
+        
+            
+#             print("Waiting / handling time . . . ")
+#             asyncio.gather(asyncio.ensure_future(await asyncio.sleep(self.handlingTime)))
+#             print("QC Resuming . . . Verirying classification.")
+#             if self.classification == "Sensor":
+#                 print("DOING QC")
+#                 asyncio.gather(self.qcAvgTask)
+#                 while not self.qcAvgTask.done():
+#                     await asyncio.sleep(1)
+#                     print("SLEEEEEPING")
+#                 if self.qcAvgTask.done():
+#                     currentDatetime = datetime.now()
+#                     sensorAvgFFT = self.device.avgResult[self.start_idx: self.end_idx]
+#                     diff = 20*np.log(np.abs(self.stdRefFFT)) - 20*np.log(np.abs(sensorAvgFFT))
+#                     err = 0 
+#                     for j,k in zip(diff, f):
+#                         if abs(j) > self.config['QC']['allowedErrordB']:                # <<<<<<<<< QC criterion
+#                             err+=1
+#                     if err > self.config['QC']['maxViolations']:                  # <<<<<<<<< QC criterion
+#                         print("QC FAIL")
+#                         self.qcResult = "FAIL"
+#                     else:
+#                         print("QC PASS")
+#                         self.qcResult = "PASS"
+#                     resonanceMin = self.findResonanceMinima()
+#                     self.qcResultsList.append({'datetime': currentDatetime.strftime("%d-%m-%y %H:%M:%S"),
+#                                             'sensorId':self.sensorId,
+#                                             'waferId': self.waferId,
+#                                             'qcResult': self.qcResult,
+#                                             'resonance': resonanceMin})
+
+#                     self.qcRunNum +=1
+#                     self.previousClassification = "Sensor"    
+#                     self.qcUpdateReady.emit() # announce results
+
+#                     rawExportData = np.vstack([self.timeAxis, self.avgPulseAmp]).T
+#                     header = f"""THEA QC - RAM Group GmbH, powered by Menlo Systems\nProgram Version 1.04\nAverage over {self.numAvgs} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}
+# User time axis shift: {self.config['TScan']['begin']*-1}, QC Parameters: {self.qcParams}
+# Time [ps]              THz Signal [mV]"""
+#                     base_name = f"""{currentDatetime.strftime("%d%m%yT%H%M%S")}_WID_{self.waferId}_SN_{self.sensorId}_{self.qcResult}_Reference"""
+#                     saveWaferDir = os.path.join(self.qcSaveDir, str(datetime.now().date()) , self.waferId)
+#                     if not os.path.isdir(saveWaferDir):
+#                         os.makedirs(os.path.join(saveWaferDir))
+#                         data_file = os.path.join(saveWaferDir.replace("/","\\"), f'{base_name}.txt')
+#                         np.savetxt(data_file, rawExportData, header = header, delimiter = '\t' )  
+#                     else:                        
+#                         data_file = os.path.join(saveWaferDir.replace("/","\\"), f'{base_name}.txt')
+#                         np.savetxt(data_file, rawExportData, header = header, delimiter = '\t' )  
+#                 else:
+#                     await asyncio.sleep(0.1)
+#         elif self.classification == "Air":
+#             self.previousClassification = "Air"
+        await asyncio.sleep(0.01)
+
+
+    @asyncSlot()
+    async def startQC(self):
+
+        """Set QC running flag and prepare for QC averaging"""
 
         self.qcRunning = True
-        if self.stdRef is not None and not self.qcComplete:
-            start_idx = self.find_nearest(self.freq, self.config['QC']['lowerFreqBound'])[0]
-            end_idx =  self.find_nearest(self.freq, self.config['QC']['upperFreqBound'])[0]
-            stdRefAmp =  self.stdRef.amp[0]
-            _, stdRefFFT = self.calculateFFT(self.timeAxis, stdRefAmp)
-            stdRefFFT = stdRefFFT[start_idx: end_idx]
-            f = self.freq[start_idx: end_idx]
+        self.qcComplete = False
+        
+        if self.stdRef is not None:
+            print("Preparing QC resources . . . ")
+            self.start_idx = self.find_nearest(self.freq, self.config['QC']['lowerFreqBound'])[0]
+            self.end_idx =  self.find_nearest(self.freq, self.config['QC']['upperFreqBound'])[0]
+            self.stdRefAmp =  self.stdRef.amp[0]
+            _, self.stdRefFFT = self.calculateFFT(self.timeAxis, self.stdRefAmp)
+            self.stdRefFFT = self.stdRefFFT[self.start_idx: self.end_idx]
+            f = self.freq[self.start_idx: self.end_idx]
+        await asyncio.sleep(0.01)
+
+
+    @asyncSlot()
+    async def finishQC(self):
+
+        """Set QC running flag and wrap up session"""
+
+        self.qcRunning = False
+        self.qcComplete = True
            
-            if self.classification == "Sensor":
-
-                self.numAvgs = self.config['QC']['qcAverages']
-                if isinstance(self.numAvgs, int):
-                    self.setDesiredAverages(desiredAvgs = self.numAvgs)
-                    print("Setting averages for QC")
-                    self.keepRunning = True
-                    print("Waiting / handling time . . . ")
-                    await asyncio.sleep(self.config['QC']['handlingTime'])
-                    print("QC Resuming . . . Verirying classification.")
-                    if self.classification == "Sensor":
-                        self.qcAvgTask = asyncio.ensure_future(self.startAveraging)
-                        asyncio.gather(self.qcAvgTask)
-                        while not self.qcAvgTask.done():
-                            await asyncio.sleep(1)
-                        if self.qcAvgTask.done():
-                            currentDatetime = datetime.now()
-                            sensorAvgFFT = self.device.avgResult[start_idx: end_idx]
-                            diff = 20*np.log(np.abs(stdRefFFT)) - 20*np.log(np.abs(sensorAvgFFT))
-                            err = 0 
-                            for j,k in zip(diff, f):
-                                if abs(j) > self.config['QC']['allowedErrordB']:                # <<<<<<<<< QC criterion
-                                    err+=1
-                            if err > self.config['QC']['maxViolations']:                  # <<<<<<<<< QC criterion
-                                print("QC FAIL")
-                                self.qcResult = "FAIL"
-                            else:
-                                print("QC PASS")
-                                self.qcResult = "PASS"
-                            resonanceMin = self.findResonanceMinima()
-
-                            
-
-                            self.qcResultsList.append({'datetime': currentDatetime.strftime("%d-%m-%y %H:%M:%S"),
-                                                    'sensorId':self.sensorId,
-                                                    'waferId': self.waferId,
-                                                    'qcResult': self.qcResult,
-                                                    'resonance': resonanceMin})
-
-                            self.qcRunNum +=1
-                            self.previousClassification = "Sensor"    
-                            self.qcUpdateReady.emit() # announce results
-
-                            rawExportData = np.vstack([self.timeAxis, self.avgPulseAmp]).T
-                            header = f"""THEA QC - RAM Group GmbH, powered by Menlo Systems\nProgram Version 1.04\nAverage over {self.numAvgs} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}
-        User time axis shift: {self.config['TScan']['begin']*-1}, QC Parameters: {self.qcParams}
-        Time [ps]              THz Signal [mV]"""
-                            base_name = f"""{currentDatetime.strftime("%d%m%yT%H%M%S")}_WID_{self.waferId}_SN_{self.sensorId}_{self.qcResult}_Reference"""
-                            saveWaferDir = os.path.join(self.qcSaveDir, str(datetime.now().date()) , self.waferId)
-                            if not os.path.isdir(saveWaferDir):
-                                os.makedirs(os.path.join(saveWaferDir))
-                                data_file = os.path.join(saveWaferDir.replace("/","\\"), f'{base_name}.txt')
-                                np.savetxt(data_file, rawExportData, header = header, delimiter = '\t' )  
-                            else:                        
-                                data_file = os.path.join(saveWaferDir.replace("/","\\"), f'{base_name}.txt')
-                                np.savetxt(data_file, rawExportData, header = header, delimiter = '\t' )  
-                        else:
-                            await asyncio.sleep(0.1)
-            elif self.classification == "Air":
-                self.previousClassification = "Air"
-
-            
-            
-
-            
-
 
     def loadDcBkg(self):
 
@@ -218,6 +242,7 @@ class TheaQC(Experiment):
                         'fUB':self.config['QC']['upperFreqBound'],
                         'errTh':self.config['QC']['allowedErrordB'],
                         'nErrV':self.config['QC']['maxViolations']}
+        self.qcNumAvgs = self.config['QC']['qcAverages']
         self.chipsPerWafer = self.config['QC']['chipsPerWafer']
         qcSaveDir = self.config['QC']['qcSaveDir']
         if qcSaveDir is None or not os.path.isdir(qcSaveDir):
@@ -310,7 +335,7 @@ class TheaQC(Experiment):
         self.pulseAmp = self.pulseAmp.copy()
         self.classifyTDS()                            # Live Cartridge sensing
         self.freq, self.FFT = self.calculateFFT(self.timeAxis,self.pulseAmp)
-        
+        self.doQC()
         await asyncio.sleep(0.1)
         
  
@@ -345,21 +370,33 @@ class TheaQC(Experiment):
             
 
     @asyncSlot()
-    async def startAveraging(self):
+    async def startAveraging(self, numAvgs = None):
 
         """
             AsyncSlot coroutine to initiate the averaging task. Buttons are partially disabled during the process. 
         """                
-        self.device.setDesiredAverages(self.tdsParams['numAvgs'])
         await asyncio.sleep(0.1)
-        if self.device.avgTask is not None and  self.device.avgTask.done():
-                self.device.avgTask = None
+        if numAvgs == None:            
+            self.device.setDesiredAverages(self.numAvgs)
+            print(f"default averaginig: {self.numAvgs}")
+        else:
+            self.device.setDesiredAverages(numAvgs)
+            print(f"special averaginig: {numAvgs}")
+        
+        # if self.device.avgTask is not None and self.device.isAveragingDone():
+        #     print("DEVICE TASK IS BEING SET TO NONE")
+        #     self.device.avgTask = None
                 
-        await asyncio.sleep(0.01)
+        await asyncio.sleep(1)
         self.device.keepRunning = True
         self.device.avgTask = asyncio.ensure_future(self.device.doAvgTask())
         await asyncio.gather(self.device.avgTask)
-        
+        while not self.device.isAveragingDone():
+            await asyncio.sleep(1)
+        if self.device.isAveragingDone():
+            print(f"{self.device.scanControl.currentAverages}/{self.device.scanControl.desiredAverages}")
+            print("DONE")
+            
 
 
     @asyncSlot()
@@ -373,7 +410,6 @@ class TheaQC(Experiment):
             if self.timelapseTask is not None:
                 print("CANCELLING TLAPSE TASK")
                 self.timelapseTask.cancel()
-
             if self.device.avgTask is not None:
                 self.device.avgTask.cancel()
                 print("Averaging cancelled")
