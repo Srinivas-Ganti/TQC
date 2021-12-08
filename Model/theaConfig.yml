@@ -14,13 +14,12 @@ QC:
   handlingTime: 2s
   lowerFreqBound: 0.5
   maxViolations: 7
-  qcAverages: 10
+  qcAverages: 40
   qcSaveDir: C:\Users\TeraSmart\Documents\API_MenloSystem\RamGlobalSystem\TQC\Export
   sensorId: 1
-  stdRefFilePath: C:\Users\TeraSmart\Documents\API_MenloSystem\RamGlobalSystem\LiveQC\rWatchDog\QChecker\Resources\StandardReferences\180821T162000_WID_W0_SN_3_STANDARD_Reference.txt
+  stdRefFilePath: C:\Users\TeraSmart\Documents\THEA_Python\TQC\Resources\StandardReferences\071221T151127_WID_W0_SN_1_STANDARD_Reference.txt
   upperFreqBound: 0.9
   waferId: W0000
-  
 Spectrometer:
   name: TERASMART
   systemNum: 0
@@ -28,13 +27,11 @@ TScan:
   begin: -320
   numAvgs: 10
   window: 400
+Temp:
+  airFileNames:
+  - Air_singleshot.txt
+  sensorFileNames:
+  - F1_singleshot.txt
 Timelapse:
   interval: 5s
   repeats: 3
-
-
-Temp:
-  airFileNames: 
-  - Air_singleshot.txt
-  sensorFileNames: 
-  - F1_singleshot.txt
