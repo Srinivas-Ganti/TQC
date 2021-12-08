@@ -56,7 +56,9 @@ class TqcMainWindow(QWidget):
         self.btnResetAvg.clicked.connect(self.resetAveraging)
         # self.btnStartTimelapse.clicked.connect(self.startTimelapse)
         self.btnStartQC.clicked.connect(self.startQC)
+        self.btnStartQC.clicked.connect(self.experiment.startQC)
         self.btnFinishQC.clicked.connect(self.finishQC)
+        self.btnFinishQC.clicked.connect(self.experiment.finishQC)
         self.btnNewStdRef.clicked.connect(self.experiment.measureStandardRef)
         self.btnNewStdRef.clicked.connect(self.measureStandardRef)
         
@@ -88,17 +90,27 @@ class TqcMainWindow(QWidget):
             self.qCcurrentMsg.setText("Result: Processing . . . ") 
 
             if isinstance(self.experiment.numAvgs, int):
-                self.lEditTdsAvgs.setText(str(self.experiment.numAvgs))
-            while  not self.experiment.qcAvgTask.done():
-                asyncio.sleep(0.1)
-            if self.experiment.qcAvgTask.done():
-                stdRefPlot = self.plot(self.experiment.freq, 20*np.log(np.abs(self.experiment.stdRef.FFT[0])))
-                stdRefPlot.curve.setPen(color = self.colorstdRef, width = self.averagePlotLineWidth)
+                self.lEditTdsAvgs.setText(str(self.experiment.qcNumAvgs))
+                self.lEditTdsAvgs.editingFinished.emit()
+            # while  not self.experiment.qcAvgTask.done():
+            #     asyncio.sleep(0.1)
+            # if self.experiment.qcAvgTask.done():
+            #     stdRefPlot = self.plot(self.experiment.freq, 20*np.log(np.abs(self.experiment.stdRef.FFT[0])))
+            #     stdRefPlot.curve.setPen(color = self.colorstdRef, width = self.averagePlotLineWidth)
 
 
     @asyncSlot()
     async def finishQC(self):
-        pass
+        
+        """Finish QC, restore GUI state to idle"""
+
+        self.enableButtons()
+        self.message("QC session end. Generating report . . . ")
+
+        self.lblQcStatusIcon.setPixmap(QPixmap("Icons/status-offline.png"))
+        self.lblQcStatusIcon.setScaledContents(True)
+        self.qCcurrentMsg.setText("Result: Not available ") 
+
 
 
     @asyncSlot()
