@@ -139,19 +139,25 @@ class Device(QWidget):
 
         """Perform averaging task and emit final result as signal"""
 
-        await asyncio.sleep(0.01)
+        
         
         if self.avgTask is not None:
             self.resetAveraging()
             if not self.isAcquiring:
                 self.start()            
-
+            while not self.isAveragingDone():
+                await asyncio.sleep(1)
             # print(f"Averaging: {self.scanControl.currentAverages}/{self.scanControl.desiredAverages}\r")
             if self.scanControl.currentAverages==self.scanControl.desiredAverages:
                 avgData = self.pulseData
-                self.resetAveraging()
                 self.dataUpdateReady.emit(avgData)
+                # self.resetAveraging()
                     
+
+    def isAveragingDone(self):
+
+        return self.scanControl.currentAverages==self.scanControl.desiredAverages
+
 
     def resetAveraging(self):
 
@@ -160,6 +166,7 @@ class Device(QWidget):
         """
 
         print("> [SCANCONTROL] Resetting averages")
+        self.qcResult = None
         self.scanControl.resetAveraging()
 
 
@@ -178,10 +185,14 @@ class Device(QWidget):
             self.isAcquiring = True    
             print("> [SCANCONTROL] Receiving Pulses . . . ")   
 
-            if self.avgTask is not None and self.avgTask.done():
+            if self.avgTask is not None and self.isAveragingDone():
+                
                 self.setDesiredAverages(1)
 
-            print("Default/ non task avgs set to single shot")
+                print("Default/ non task avgs set to single shot")
+            else:
+
+                print(f"No averaging task given. Averages set to : {self.scanControl.desiredAverages}")
 
         except AttributeError:
             print("> [ERROR] InitalisationError: Menlo ScanControl is not ready. Please follow normal startup using Menlo ScanControl before launching the QC app")
@@ -200,6 +211,7 @@ class Device(QWidget):
         
         self.isAcquiring = False
         self.keepRunning = False
+        self.avgTask = None
 
 
     def connect(self):
