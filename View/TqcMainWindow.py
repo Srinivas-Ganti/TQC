@@ -67,10 +67,16 @@ class TqcMainWindow(QWidget):
         self.lEditTdsStart.editingFinished.connect(self.validateEditStart)
         self.lEditTdsEnd.setReadOnly(True)
         self.lEditTdsAvgs.editingFinished.connect(self.validateEditAverages)
+        self.lEditTdsAvgs.textChanged.connect(self.avgsChanged)
         self.lEditInterval.editingFinished.connect(self.validateEditInterval)
         self.lEditRepeatNum.editingFinished.connect(self.validateEditRepeats) 
         self.lEditWaferId.editingFinished.connect(self.validateEditWaferId)
         self.lEditSensorId.editingFinished.connect(self.validateEditSensorId)
+
+
+    def avgsChanged(self):
+
+        print(f"Averages changed to : {self.experiment.numAvgs}")
 
 
     @asyncSlot()
@@ -218,6 +224,8 @@ class TqcMainWindow(QWidget):
             self.btnNewStdRef.setEnabled(False)
 
         if self.experiment.device.isAcquiring:
+            self.lEditTdsAvgs.setText(str(self.experiment.device.numAvgs))
+            # self.lEditTdsAvgs.editingFinished.emit()
             if self.plotDataContainer['livePulseFft'] is None :
                 self.plotDataContainer['livePulseFft'] = self.plot(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
                 self.plotDataContainer['livePulseFft'].curve.setPen(color = self.colorLivePulse, width = self.averagePlotLineWidth)
@@ -230,7 +238,16 @@ class TqcMainWindow(QWidget):
                 self.plotDataContainer['livePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
                 self.plotDataContainer['livePulseFft'].curve.setPen(color = self.colorlivePulseBackground, width = self.livePlotLineWidth)
                 self.plotDataContainer['currentAveragePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(self.experiment.currentAverageFft)))
+            self.checkNextSensor()
             
+            
+    def checkNextSensor(self):
+
+        """Update sensor id in GUI"""
+
+        if self.experiment.qcRunNum > 0:
+            self.lEditSensorId.setText(str(self.experiment.sensorId))
+           
 
     @asyncSlot()
     async def _statusChanged(self, status):
