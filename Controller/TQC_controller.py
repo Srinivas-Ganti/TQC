@@ -138,8 +138,6 @@ class Device(QWidget):
     async def doAvgTask(self):
 
         """Perform averaging task and emit final result as signal"""
-
-        
         
         if self.avgTask is not None:
             self.resetAveraging()
@@ -147,14 +145,14 @@ class Device(QWidget):
                 self.start()            
             while not self.isAveragingDone():
                 await asyncio.sleep(1)
-            # print(f"Averaging: {self.scanControl.currentAverages}/{self.scanControl.desiredAverages}\r")
-            if self.scanControl.currentAverages==self.scanControl.desiredAverages:
+            if self.isAveragingDone():
                 avgData = self.pulseData
                 self.dataUpdateReady.emit(avgData)
-                # self.resetAveraging()
-                    
+            
 
     def isAveragingDone(self):
+
+        """ Check if averaging is completed"""
 
         return self.scanControl.currentAverages==self.scanControl.desiredAverages
 
