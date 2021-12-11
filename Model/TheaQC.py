@@ -111,81 +111,87 @@ class TheaQC(Experiment):
         self.qcStep = None
 
     
+    async def measureSensor(self):
+    
+        """Coroutine to measure sensor during QC"""
+    
+        if self.classification == "Sensor":
+
+            self.device.setDesiredAverages(self.qcNumAvgs)        
+            print("Sensor confirmed, begin processing cartridge")
+            await self.startAveraging(self.qcNumAvgs)
+            while not self.device.isAveragingDone():
+                await asyncio.sleep(0.5)
+
+
+            self.device.avgTask = None
+            self.device.setDesiredAverages(1)
+
+
+    @asyncSlot()
+    async def checkNextSensor(self):
+
+        """
+            AsyncSlot coroutine to check for the event transition that corresponds to a new sensor being inserted in the beam path.
+            If a new sensor is introduced, then increment the sensor number and begin a new round of QC on the 
+            new sensor.
+        """        
+
+        if self.qcRunning and not self.qcComplete and self.qcRunNum > 0:   
+
+            print("Checking next sensor")
+            
+            if (self.previousClassification in [None, "Air"] and self.classification == "Sensor"):
+                print("Detected new sensor")
+
+                await self.doQC()
+               
+                if self.qcRunNum > 0:
+                    print("Incrementing sensor ID for next QC")
+                    self.sensorId += 1
+                
+                 
+                
+            elif self.previousClassification == "Sensor" and self.classification == "Air":
+                print("Sensor removed")
+                self.previousClassification = "Air"
+
+            elif self.previousClassification == "Sensor" and self.classification == "Sensor":
+                print("Waiting for next sensor")
+                
+            
+               
+            await asyncio.sleep(0.01)
+            
+
+
     @asyncSlot()
     async def doQC(self):
 
         """Comparitive QC against standard reference.As sensors are being 
             detected and measured, the QC results are updated and files are exported to the destination directory
             as specified in the config file."""
-        
-        if self.qcRunning and self.qcStep is None:
-            self.qcStep = 0
-            if self.previousClassification is None and self.classification == 'Sensor' and self.qcAvgTask is None:
-               self.device.avgTask = None
-               print("Sensor Detected. Double checking . . .")
-               await asyncio.sleep(self.handlingTime)
-               if self.classification == "Sensor":
-                   print("Sensor confirmed, begin processing cartridge")
-                   await self.startAveraging(self.qcNumAvgs)
-                   await asyncio.sleep(0.1)
-                   
 
+        if self.qcRunning:
+   
+            if (self.previousClassification in [None, "Air"]) and self.classification == 'Sensor':
+                self.device.avgTask = None
+                print("Sensor Detected. Double checking . . .")
+                await asyncio.sleep(self.handlingTime)
+                if self.classification == "Sensor":
+                    self.device.setDesiredAverages(self.qcNumAvgs)
+                    self.qcAvgTask = asyncio.ensure_future(self.measureSensor())
+                    await asyncio.gather(self.qcAvgTask)
+                    while not self.qcAvgTask.done():
+                        await asyncio.sleep(0.5)
+                    self.device.setDesiredAverages(1)
+                    self.previousClassification = "Sensor" 
+                    self.qcRunNum += 1
+            elif (self.previousClassification == "Sensor" and self.classification == 'Air'):
+                self.previousClassification = "Air"
+                print("Sensor removed . . . ")
+                
 
-               
-        
-            
-#             print("Waiting / handling time . . . ")
-#             asyncio.gather(asyncio.ensure_future(await asyncio.sleep(self.handlingTime)))
-#             print("QC Resuming . . . Verirying classification.")
-#             if self.classification == "Sensor":
-#                 print("DOING QC")
-#                 asyncio.gather(self.qcAvgTask)
-#                 while not self.qcAvgTask.done():
-#                     await asyncio.sleep(1)
-#                     print("SLEEEEEPING")
-#                 if self.qcAvgTask.done():
-#                     currentDatetime = datetime.now()
-#                     sensorAvgFFT = self.device.avgResult[self.start_idx: self.end_idx]
-#                     diff = 20*np.log(np.abs(self.stdRefFFT)) - 20*np.log(np.abs(sensorAvgFFT))
-#                     err = 0 
-#                     for j,k in zip(diff, f):
-#                         if abs(j) > self.config['QC']['allowedErrordB']:                # <<<<<<<<< QC criterion
-#                             err+=1
-#                     if err > self.config['QC']['maxViolations']:                  # <<<<<<<<< QC criterion
-#                         print("QC FAIL")
-#                         self.qcResult = "FAIL"
-#                     else:
-#                         print("QC PASS")
-#                         self.qcResult = "PASS"
-#                     resonanceMin = self.findResonanceMinima()
-#                     self.qcResultsList.append({'datetime': currentDatetime.strftime("%d-%m-%y %H:%M:%S"),
-#                                             'sensorId':self.sensorId,
-#                                             'waferId': self.waferId,
-#                                             'qcResult': self.qcResult,
-#                                             'resonance': resonanceMin})
-
-#                     self.qcRunNum +=1
-#                     self.previousClassification = "Sensor"    
-#                     self.qcUpdateReady.emit() # announce results
-
-#                     rawExportData = np.vstack([self.timeAxis, self.avgPulseAmp]).T
-#                     header = f"""THEA QC - RAM Group GmbH, powered by Menlo Systems\nProgram Version 1.04\nAverage over {self.numAvgs} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}
-# User time axis shift: {self.config['TScan']['begin']*-1}, QC Parameters: {self.qcParams}
-# Time [ps]              THz Signal [mV]"""
-#                     base_name = f"""{currentDatetime.strftime("%d%m%yT%H%M%S")}_WID_{self.waferId}_SN_{self.sensorId}_{self.qcResult}_Reference"""
-#                     saveWaferDir = os.path.join(self.qcSaveDir, str(datetime.now().date()) , self.waferId)
-#                     if not os.path.isdir(saveWaferDir):
-#                         os.makedirs(os.path.join(saveWaferDir))
-#                         data_file = os.path.join(saveWaferDir.replace("/","\\"), f'{base_name}.txt')
-#                         np.savetxt(data_file, rawExportData, header = header, delimiter = '\t' )  
-#                     else:                        
-#                         data_file = os.path.join(saveWaferDir.replace("/","\\"), f'{base_name}.txt')
-#                         np.savetxt(data_file, rawExportData, header = header, delimiter = '\t' )  
-#                 else:
-#                     await asyncio.sleep(0.1)
-#         elif self.classification == "Air":
-#             self.previousClassification = "Air"
-        await asyncio.sleep(0.01)
 
 
     @asyncSlot()
@@ -203,8 +209,10 @@ class TheaQC(Experiment):
             self.stdRefAmp =  self.stdRef.amp[0]
             _, self.stdRefFFT = self.calculateFFT(self.timeAxis, self.stdRefAmp)
             self.stdRefFFT = self.stdRefFFT[self.start_idx: self.end_idx]
-            f = self.freq[self.start_idx: self.end_idx]
+            self.fRange = self.freq[self.start_idx: self.end_idx]
+            self.doQC()
         await asyncio.sleep(0.01)
+        
 
 
     @asyncSlot()
@@ -335,7 +343,7 @@ class TheaQC(Experiment):
         self.pulseAmp = self.pulseAmp.copy()
         self.classifyTDS()                            # Live Cartridge sensing
         self.freq, self.FFT = self.calculateFFT(self.timeAxis,self.pulseAmp)
-        self.doQC()
+        self.checkNextSensor()
         await asyncio.sleep(0.1)
         
  
