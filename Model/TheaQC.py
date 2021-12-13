@@ -36,13 +36,11 @@ class TheaQC(Experiment):
             self.TdsWin = self.config['TScan']['window']
 
 
-
     def initResources(self):
 
         """
             Initialise class attributes for QC application with default values.
         """
-      
 
         self.startOk = False                                  # Flag for TDS pulse start time validation
         self.endOk = False                                    # Flag for TDS pulse end time validation
@@ -75,7 +73,6 @@ class TheaQC(Experiment):
         """
 
         self.pulseAmp = None                       # Received pulse data              
-        
         self.timeAxis = None                       # time data 
         self.timelapseRunning = False              # Flag to check if timelapse is running
         self.TdsWin = None                         # TDS windowing duration (ps)
@@ -95,12 +92,10 @@ class TheaQC(Experiment):
         self.waferId = None                        # QC wafer ID
         self.sensorId = None                       # QC sensor ID
         self.tdsParams = {}                        # Empty dictionary to hold TDS pulse parameters
-
         self.pulseLatency = 1                      # time in seconds for processing TDS pulses
         self.currentAverageFft = None              # averaged pulse FFT
         self.frame = None                          # timelapse frame
         self.frames = None                         # list of timelapse frames  
-        
         self.chipsPerWafer = None                  # Parameter to trigger wafer ID change (not used)
         self.classificationDistance = None         # Pulse peak fitting parameters for classification- distance (see scipy.find_peaks())
         self.classificationProminence = None
@@ -110,119 +105,6 @@ class TheaQC(Experiment):
 
         self.qcStep = None
 
-    
-    async def measureSensor(self):
-    
-        """Coroutine to measure sensor during QC"""
-    
-        if self.classification == "Sensor":
-
-            self.device.setDesiredAverages(self.qcNumAvgs)        
-            print("Sensor confirmed, begin processing cartridge")
-            await self.startAveraging(self.qcNumAvgs)
-            while not self.device.isAveragingDone():
-                await asyncio.sleep(0.5)
-
-
-            self.device.avgTask = None
-            self.device.setDesiredAverages(1)
-
-
-    @asyncSlot()
-    async def checkNextSensor(self):
-
-        """
-            AsyncSlot coroutine to check for the event transition that corresponds to a new sensor being inserted in the beam path.
-            If a new sensor is introduced, then increment the sensor number and begin a new round of QC on the 
-            new sensor.
-        """        
-
-        if self.qcRunning and not self.qcComplete and self.qcRunNum > 0:   
-
-            print("Checking next sensor")
-            
-            if (self.previousClassification in [None, "Air"] and self.classification == "Sensor"):
-                print("Detected new sensor")
-
-                await self.doQC()
-               
-                if self.qcRunNum > 0:
-                    print("Incrementing sensor ID for next QC")
-                    self.sensorId += 1
-                
-                 
-                
-            elif self.previousClassification == "Sensor" and self.classification == "Air":
-                print("Sensor removed")
-                self.previousClassification = "Air"
-
-            elif self.previousClassification == "Sensor" and self.classification == "Sensor":
-                print("Waiting for next sensor")
-                
-            
-               
-            await asyncio.sleep(0.01)
-            
-
-
-    @asyncSlot()
-    async def doQC(self):
-
-        """Comparitive QC against standard reference.As sensors are being 
-            detected and measured, the QC results are updated and files are exported to the destination directory
-            as specified in the config file."""
-
-        if self.qcRunning:
-   
-            if (self.previousClassification in [None, "Air"]) and self.classification == 'Sensor':
-                self.device.avgTask = None
-                print("Sensor Detected. Double checking . . .")
-                await asyncio.sleep(self.handlingTime)
-                if self.classification == "Sensor":
-                    self.device.setDesiredAverages(self.qcNumAvgs)
-                    self.qcAvgTask = asyncio.ensure_future(self.measureSensor())
-                    await asyncio.gather(self.qcAvgTask)
-                    while not self.qcAvgTask.done():
-                        await asyncio.sleep(0.5)
-                    self.device.setDesiredAverages(1)
-                    self.previousClassification = "Sensor" 
-                    self.qcRunNum += 1
-            elif (self.previousClassification == "Sensor" and self.classification == 'Air'):
-                self.previousClassification = "Air"
-                print("Sensor removed . . . ")
-                
-
-
-
-    @asyncSlot()
-    async def startQC(self):
-
-        """Set QC running flag and prepare for QC averaging"""
-
-        self.qcRunning = True
-        self.qcComplete = False
-        
-        if self.stdRef is not None:
-            print("Preparing QC resources . . . ")
-            self.start_idx = self.find_nearest(self.freq, self.config['QC']['lowerFreqBound'])[0]
-            self.end_idx =  self.find_nearest(self.freq, self.config['QC']['upperFreqBound'])[0]
-            self.stdRefAmp =  self.stdRef.amp[0]
-            _, self.stdRefFFT = self.calculateFFT(self.timeAxis, self.stdRefAmp)
-            self.stdRefFFT = self.stdRefFFT[self.start_idx: self.end_idx]
-            self.fRange = self.freq[self.start_idx: self.end_idx]
-            self.doQC()
-        await asyncio.sleep(0.01)
-        
-
-
-    @asyncSlot()
-    async def finishQC(self):
-
-        """Set QC running flag and wrap up session"""
-
-        self.qcRunning = False
-        self.qcComplete = True
-           
 
     def loadDcBkg(self):
 
@@ -327,6 +209,107 @@ class TheaQC(Experiment):
         self.sensorUpdateReady.emit()  
 
 
+    async def measureSensor(self):
+    
+        """Coroutine to measure sensor during QC"""
+    
+        if self.classification == "Sensor":
+
+            self.device.setDesiredAverages(self.qcNumAvgs)        
+            print("Sensor confirmed, begin processing cartridge")
+            await self.startAveraging(self.qcNumAvgs)
+            while not self.device.isAveragingDone():
+                await asyncio.sleep(0.5)
+
+            self.device.avgTask = None
+            self.device.setDesiredAverages(1)
+
+
+    @asyncSlot()
+    async def checkNextSensor(self):
+
+        """
+            AsyncSlot coroutine to check for the event transition that corresponds to a new sensor being inserted in the beam path.
+            If a new sensor is introduced, then increment the sensor number and begin a new round of QC on the 
+            new sensor.
+        """        
+
+        if self.qcRunning and not self.qcComplete and self.qcRunNum > 0:   
+
+            print("Checking next sensor")
+            
+            if (self.previousClassification in [None, "Air"] and self.classification == "Sensor"):
+                print("Detected new sensor")
+                if self.qcAvgTask.done():
+                    await self.doQC()
+                if self.qcRunNum > 0:
+                    print("Incrementing sensor ID for next QC")
+                    self.sensorId += 1
+            elif self.previousClassification == "Sensor" and self.classification == "Air":
+                print("Sensor removed")
+                self.previousClassification = "Air"
+
+            elif self.previousClassification == "Sensor" and self.classification == "Sensor":
+                print("Waiting for next sensor")
+            await asyncio.sleep(0.01)
+            
+
+    @asyncSlot()
+    async def doQC(self):
+
+        """Comparitive QC against standard reference.As sensors are being 
+            detected and measured, the QC results are updated and files are exported to the destination directory
+            as specified in the config file."""
+
+        if self.qcRunning:
+   
+            if (self.previousClassification in [None, "Air"]) and self.classification == 'Sensor':
+                self.device.avgTask = None
+                print("Sensor Detected. Double checking . . .")
+                self.previousClassification = "Sensor" 
+                await asyncio.sleep(self.handlingTime)
+                if self.classification == "Sensor":
+                    self.device.setDesiredAverages(self.qcNumAvgs)
+                    self.qcAvgTask = asyncio.ensure_future(self.measureSensor())
+                    await asyncio.gather(self.qcAvgTask)
+                    while not self.qcAvgTask.done():
+                        await asyncio.sleep(0.5)
+                    self.device.setDesiredAverages(1)
+                    self.qcRunNum += 1
+            elif (self.previousClassification == "Sensor" and self.classification == 'Air'):
+                self.previousClassification = "Air"
+                print("Sensor removed . . . ")
+                
+
+    @asyncSlot()
+    async def startQC(self):
+
+        """Set QC running flag and prepare for QC averaging"""
+
+        self.qcRunning = True
+        self.qcComplete = False
+        
+        if self.stdRef is not None:
+            print("Preparing QC resources . . . ")
+            self.start_idx = self.find_nearest(self.freq, self.config['QC']['lowerFreqBound'])[0]
+            self.end_idx =  self.find_nearest(self.freq, self.config['QC']['upperFreqBound'])[0]
+            self.stdRefAmp =  self.stdRef.amp[0]
+            _, self.stdRefFFT = self.calculateFFT(self.timeAxis, self.stdRefAmp)
+            self.stdRefFFT = self.stdRefFFT[self.start_idx: self.end_idx]
+            self.fRange = self.freq[self.start_idx: self.end_idx]
+            self.doQC()
+        await asyncio.sleep(0.01)
+        
+
+    @asyncSlot()
+    async def finishQC(self):
+
+        """Set QC running flag and wrap up session"""
+
+        self.qcRunning = False
+        self.qcComplete = True
+           
+
     @asyncSlot()
     async def processPulses(self,data):
 
@@ -390,10 +373,6 @@ class TheaQC(Experiment):
         else:
             self.device.setDesiredAverages(numAvgs)
             print(f"special averaginig: {numAvgs}")
-        
-        # if self.device.avgTask is not None and self.device.isAveragingDone():
-        #     print("DEVICE TASK IS BEING SET TO NONE")
-        #     self.device.avgTask = None
                 
         await asyncio.sleep(1)
         self.device.keepRunning = True
