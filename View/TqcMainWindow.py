@@ -42,7 +42,7 @@ class TqcMainWindow(QWidget):
         self.experiment.device.dataUpdateReady.connect(self.experiment.device.done)
         self.experiment.device.pulseReady.connect(self.startAveraging)
         self.experiment.qcUpdateReady.connect(self.qcResult)
-
+        self.experiment.sensorUpdateReady.connect(self.checkNextSensor)     
         self.livePlot.scene().sigMouseMoved.connect(self.mouseMoved)
         self.dataUpdateReady.connect(self.updatePlot)
         
@@ -62,7 +62,7 @@ class TqcMainWindow(QWidget):
         self.btnNewStdRef.clicked.connect(self.experiment.measureStandardRef)
         self.btnNewStdRef.clicked.connect(self.measureStandardRef)
         
-        # self.sensorUpdateReady.connect(self.checkNextSensor)
+        
         self.experiment.sensorUpdateReady.connect(self.classifyTDS)
         self.lEditTdsStart.editingFinished.connect(self.validateEditStart)
         self.lEditTdsEnd.setReadOnly(True)
@@ -76,7 +76,7 @@ class TqcMainWindow(QWidget):
 
     def avgsChanged(self):
 
-        print(f"Averages changed to : {self.experiment.numAvgs}")
+        print(f"Experiment averages changed to : {self.experiment.numAvgs}")
 
 
     @asyncSlot()
@@ -98,7 +98,8 @@ class TqcMainWindow(QWidget):
             if isinstance(self.experiment.numAvgs, int):
                 self.lEditTdsAvgs.setText(str(self.experiment.qcNumAvgs))
                 self.lEditTdsAvgs.editingFinished.emit()
-            # while  not self.experiment.qcAvgTask.done():
+
+            # while not self.experiment.qcAvgTask.done():
             #     asyncio.sleep(0.1)
             # if self.experiment.qcAvgTask.done():
             #     stdRefPlot = self.plot(self.experiment.freq, 20*np.log(np.abs(self.experiment.stdRef.FFT[0])))
@@ -247,6 +248,7 @@ class TqcMainWindow(QWidget):
 
         if self.experiment.qcRunNum > 0:
             self.lEditSensorId.setText(str(self.experiment.sensorId))
+        
            
 
     @asyncSlot()
@@ -424,7 +426,6 @@ class TqcMainWindow(QWidget):
             self.lEditTdsAvgs.setText(str(self.experiment.config['TScan']['numAvgs']))
             
 
-        
     def validateEditInterval(self):
         
         """
