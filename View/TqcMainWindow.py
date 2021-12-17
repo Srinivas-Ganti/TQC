@@ -78,181 +78,13 @@ class TqcMainWindow(QWidget):
         print(f"Experiment averages changed to : {self.experiment.numAvgs}")
 
 
-    @asyncSlot()
-    async def startQC(self):
-        
-        """GUI button states during QC"""
-        
-        self.disableButtons()
-        self.btnFinishQC.setEnabled(True)
-
-        if self.experiment.stdRef is not None and not self.experiment.qcComplete:
-            if self.experiment.qcRunNum == 0:
-                self.message(f'> [QC]: Starting {datetime.now().strftime("%d-%m-%y %H:%M:%S")}')
-            
-            self.lblQcStatusIcon.setPixmap(QPixmap("Icons/arrow-circle-double.png"))
-            self.lblQcStatusIcon.setScaledContents(True)
-            self.qCcurrentMsg.setText("Result: Processing . . . ") 
-
-            if isinstance(self.experiment.numAvgs, int):
-                self.lEditTdsAvgs.setText(str(self.experiment.qcNumAvgs))
-                self.lEditTdsAvgs.editingFinished.emit()
-
-
-    @asyncSlot()
-    async def finishQC(self):
-        
-        """Finish QC, restore GUI state to idle"""
-
-        self.enableButtons()
-        self.message("QC session end. Generating report . . . ")
-
-        self.lblQcStatusIcon.setPixmap(QPixmap("Icons/status-offline.png"))
-        self.lblQcStatusIcon.setScaledContents(True)
-        self.qCcurrentMsg.setText("Result: Not available ") 
-
-
-
-    @asyncSlot()
-    async def measureStandardRef(self):
-
-        """GUI button states during std reference measurement"""
-
-        
-        await asyncio.sleep(0.01)
-        self.message("> [MESSAGE]: Recording new standard reference for QC . . .")
-        self.btnNewStdRef.setEnabled(False)
-        self.btnStartAveraging.clicked.emit()
-        self.message(f"> [MESSAGE]: RELOADING CONFIG, updating internal reference")
-        
-    	
-
-    @asyncSlot()
-    async def qcResult(self):
-
-        """Update graphics with latest QC results"""
-
-        if self.experiment.qcResult == "FAIL":
-            self.plotDataContainer['currentAveragePulseFft'].curve.setPen(color = self.colorFail, width = self.averagePlotLineWidth)
-            self.lblQcStatusIcon.setPixmap(QPixmap("Icons/cross-circle.png"))
-            self.lblQcStatusIcon.setScaledContents(True)
-            self.qCcurrentMsg.setText("Result: QC FAIL")
-            self.qCcurrentMsg.setText("Result: QC FAIL")
-            self.message(f"{self.waferId}_{self.sensorId} : {self.qcResult}")
-         
-        elif self.experiment.qcResult == "PASS":
-            
-            self.plotDataContainer['currentAveragePulseFft'].curve.setPen(color = self.colorPass, width = self.averagePlotLineWidth)
-            self.lblQcStatusIcon.setPixmap(QPixmap("Icons/tick-circle.png"))
-            self.lblQcStatusIcon.setScaledContents(True)
-            self.qCcurrentMsg.setText("Result: QC PASS")
-            self.message(f"{self.waferId}_{self.sensorId} : {self.qcResult}")
-
-
-    @asyncSlot()
-    async def classifyTDS(self):
-
-        await asyncio.sleep(0.1)
-        if self.experiment.classification == "Sensor":
-        
-            self.lblClassResultIcon.setPixmap(QPixmap("Icons/Sensor.png"))
-            self.lblClassResultIcon.setScaledContents(True)  
-            self.lblClassResult.setText("Result: Sensor")  
-            
-        if self.experiment.classification == "Air":
-            self.lblClassResultIcon.setPixmap(QPixmap("Icons/Air.png"))
-            self.lblClassResultIcon.setScaledContents(True)     
-            self.lblClassResult.setText("Result: Air")   
-           
-
-    @asyncSlot()
-    async def stop(self):
-
-        """Reset icons to offline state"""
-
-        self.lblClassResultIcon.setPixmap(QPixmap("Icons/status-offline.png"))
-        self.lblClassResultIcon.setScaledContents(True)  
-        self.lblClassResult.setText("Result: Not available") 
-
-        self.lblQcStatusIcon.setPixmap(QPixmap("Icons/status-offline.png"))
-        self.lblQcStatusIcon.setScaledContents(True)
-        self.qCcurrentMsg.setText("Result: not available")
-        await asyncio.sleep(0.1)
-        
-        self.enableButtons()
-        self.btnStartQC.setEnabled(False)
-
-
-    @asyncSlot()
-    async def startAveraging(self, data):
-
-        """"Update averaging progress bar"""
-        
-        await asyncio.sleep(0.01)
-        self.progAvg.setValue(int(self.experiment.device.scanControl.currentAverages/\
-                                 self.experiment.device.scanControl.desiredAverages*100))
-
-
-    @asyncSlot()
-    async def resetAveraging(self):
-
-        """"Reset averaging progress bar"""
-
-        await asyncio.sleep(0.01)
-        self.progAvg.setValue(0)
-
-
-    @asyncSlot()
-    async def processPulses(self,data):
-
-        """"GUI button state management during data processing"""
-
-        await asyncio.sleep(0.01)
-        
-        if not self.experiment.qcRunning and not self.experiment.timelapseRunning:
-            self.btnStartQC.setEnabled(True)
-            if self.experiment.classification == "Sensor":
-                self.btnNewStdRef.setEnabled(True)
-        else:
-            self.btnStartQC.setEnabled(False)
-            self.btnNewStdRef.setEnabled(False)
-
-        if self.experiment.device.isAcquiring:
-            self.lEditTdsAvgs.setText(str(self.experiment.device.numAvgs))
-            # self.lEditTdsAvgs.editingFinished.emit()
-            if self.plotDataContainer['livePulseFft'] is None :
-                self.plotDataContainer['livePulseFft'] = self.plot(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
-                self.plotDataContainer['livePulseFft'].curve.setPen(color = self.colorLivePulse, width = self.averagePlotLineWidth)
-            elif self.plotDataContainer['livePulseFft'] is not None and self.experiment.avgProgVal < 100 :
-                self.plotDataContainer['livePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
-                self.plotDataContainer['livePulseFft'].curve.setPen(color = self.colorLivePulse, width = self.averagePlotLineWidth)
-                
-            elif self.plotDataContainer['livePulseFft'] is not None and self.experiment.avgProgVal == 100:
-                
-                self.plotDataContainer['livePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
-                self.plotDataContainer['livePulseFft'].curve.setPen(color = self.colorlivePulseBackground, width = self.livePlotLineWidth)
-                self.plotDataContainer['currentAveragePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(self.experiment.currentAverageFft)))
-            self.checkNextSensor()
-            
-            
     def checkNextSensor(self):
 
         """Update sensor id in GUI"""
 
         if self.experiment.qcRunNum > 0:
             self.lEditSensorId.setText(str(self.experiment.sensorId))
-        
-           
 
-    @asyncSlot()
-    async def _statusChanged(self, status):
-
-        """
-            AsyncSlot Coroutine to indicate ScanControl Staus.
-        """        
-
-        self.lblStatus.setText("Status: " + self.experiment.device.status) 
-    
 
     def mouseMoved(self, evt):
 
@@ -431,7 +263,7 @@ class TqcMainWindow(QWidget):
     def validateEditSensorId(self):
                 
         """
-            Validate user input for QC/timelapse sensor ID.
+            Validate user input for QC sensor ID.
         """
 
         
@@ -456,7 +288,7 @@ class TqcMainWindow(QWidget):
     def initAttribs(self):
 
         """
-            Initialise class attributes for QC, timelapse application with default values.
+            Initialise class attributes for QC application with default values.
         """
 
         self.height = 900
@@ -514,7 +346,6 @@ class TqcMainWindow(QWidget):
         self.progAvg.setValue(self.experiment.avgProgVal)
         
 
-
     def disableButtons(self):
 
         """
@@ -552,6 +383,174 @@ class TqcMainWindow(QWidget):
 
         self.textbox.appendPlainText(f"{msgStrPattern}")
 
+
+    @asyncSlot()
+    async def startQC(self):
+        
+        """GUI button states during QC"""
+        
+        self.disableButtons()
+        self.btnFinishQC.setEnabled(True)
+
+        if self.experiment.stdRef is not None and not self.experiment.qcComplete:
+            if self.experiment.qcRunNum == 0:
+                self.message(f'> [QC]: Starting {datetime.now().strftime("%d-%m-%y %H:%M:%S")}')
+            
+            self.lblQcStatusIcon.setPixmap(QPixmap("Icons/arrow-circle-double.png"))
+            self.lblQcStatusIcon.setScaledContents(True)
+            self.qCcurrentMsg.setText("Result: Processing . . . ") 
+
+            if isinstance(self.experiment.numAvgs, int):
+                self.lEditTdsAvgs.setText(str(self.experiment.qcNumAvgs))
+                self.lEditTdsAvgs.editingFinished.emit()
+
+
+##################################### AsyncSlot coroutines #######################################
+
+
+    @asyncSlot()
+    async def finishQC(self):
+        
+        """Finish QC, restore GUI state to idle"""
+
+        self.enableButtons()
+        self.message("QC session end. Generating report . . . ")
+
+        self.lblQcStatusIcon.setPixmap(QPixmap("Icons/status-offline.png"))
+        self.lblQcStatusIcon.setScaledContents(True)
+        self.qCcurrentMsg.setText("Result: Not available ") 
+
+
+    @asyncSlot()
+    async def measureStandardRef(self):
+
+        """GUI button states during std reference measurement"""
+
+        
+        await asyncio.sleep(0.01)
+        self.message("> [MESSAGE]: Recording new standard reference for QC . . .")
+        self.btnNewStdRef.setEnabled(False)
+        self.btnStartAveraging.clicked.emit()
+        self.message(f"> [MESSAGE]: RELOADING CONFIG, updating internal reference")
+        
+    	
+    @asyncSlot()
+    async def qcResult(self):
+
+        """Update graphics with latest QC results"""
+
+        if self.experiment.qcResult == "FAIL":
+            self.plotDataContainer['currentAveragePulseFft'].curve.setPen(color = self.colorFail, width = self.averagePlotLineWidth)
+            self.lblQcStatusIcon.setPixmap(QPixmap("Icons/cross-circle.png"))
+            self.lblQcStatusIcon.setScaledContents(True)
+            self.qCcurrentMsg.setText("Result: QC FAIL")
+            self.qCcurrentMsg.setText("Result: QC FAIL")
+            self.message(f"{self.waferId}_{self.sensorId} : {self.qcResult}")
+         
+        elif self.experiment.qcResult == "PASS":
+            
+            self.plotDataContainer['currentAveragePulseFft'].curve.setPen(color = self.colorPass, width = self.averagePlotLineWidth)
+            self.lblQcStatusIcon.setPixmap(QPixmap("Icons/tick-circle.png"))
+            self.lblQcStatusIcon.setScaledContents(True)
+            self.qCcurrentMsg.setText("Result: QC PASS")
+            self.message(f"{self.waferId}_{self.sensorId} : {self.qcResult}")
+
+
+    @asyncSlot()
+    async def classifyTDS(self):
+
+        await asyncio.sleep(0.1)
+        if self.experiment.classification == "Sensor":
+        
+            self.lblClassResultIcon.setPixmap(QPixmap("Icons/Sensor.png"))
+            self.lblClassResultIcon.setScaledContents(True)  
+            self.lblClassResult.setText("Result: Sensor")  
+            
+        if self.experiment.classification == "Air":
+            self.lblClassResultIcon.setPixmap(QPixmap("Icons/Air.png"))
+            self.lblClassResultIcon.setScaledContents(True)     
+            self.lblClassResult.setText("Result: Air")   
+           
+
+    @asyncSlot()
+    async def stop(self):
+
+        """Reset icons to offline state"""
+
+        self.lblClassResultIcon.setPixmap(QPixmap("Icons/status-offline.png"))
+        self.lblClassResultIcon.setScaledContents(True)  
+        self.lblClassResult.setText("Result: Not available") 
+
+        self.lblQcStatusIcon.setPixmap(QPixmap("Icons/status-offline.png"))
+        self.lblQcStatusIcon.setScaledContents(True)
+        self.qCcurrentMsg.setText("Result: not available")
+        await asyncio.sleep(0.1)
+        
+        self.enableButtons()
+        self.btnStartQC.setEnabled(False)
+
+
+    @asyncSlot()
+    async def startAveraging(self, data):
+
+        """"Update averaging progress bar"""
+        
+        await asyncio.sleep(0.01)
+        self.progAvg.setValue(int(self.experiment.device.scanControl.currentAverages/\
+                                 self.experiment.device.scanControl.desiredAverages*100))
+
+
+    @asyncSlot()
+    async def resetAveraging(self):
+
+        """"Reset averaging progress bar"""
+
+        await asyncio.sleep(0.01)
+        self.progAvg.setValue(0)
+
+
+    @asyncSlot()
+    async def processPulses(self,data):
+
+        """"GUI button state management during data processing"""
+
+        await asyncio.sleep(0.01)
+        
+        if not self.experiment.qcRunning:
+            self.btnStartQC.setEnabled(True)
+            if self.experiment.classification == "Sensor":
+                self.btnNewStdRef.setEnabled(True)
+        else:
+            self.btnStartQC.setEnabled(False)
+            self.btnNewStdRef.setEnabled(False)
+
+        if self.experiment.device.isAcquiring:
+            self.lEditTdsAvgs.setText(str(self.experiment.device.numAvgs))
+            # self.lEditTdsAvgs.editingFinished.emit()
+            if self.plotDataContainer['livePulseFft'] is None :
+                self.plotDataContainer['livePulseFft'] = self.plot(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
+                self.plotDataContainer['livePulseFft'].curve.setPen(color = self.colorLivePulse, width = self.averagePlotLineWidth)
+            elif self.plotDataContainer['livePulseFft'] is not None and self.experiment.avgProgVal < 100 :
+                self.plotDataContainer['livePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
+                self.plotDataContainer['livePulseFft'].curve.setPen(color = self.colorLivePulse, width = self.averagePlotLineWidth)
+                
+            elif self.plotDataContainer['livePulseFft'] is not None and self.experiment.avgProgVal == 100:
+                
+                self.plotDataContainer['livePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
+                self.plotDataContainer['livePulseFft'].curve.setPen(color = self.colorlivePulseBackground, width = self.livePlotLineWidth)
+                self.plotDataContainer['currentAveragePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(self.experiment.currentAverageFft)))
+            self.checkNextSensor()
+            
+
+    @asyncSlot()
+    async def _statusChanged(self, status):
+
+        """
+            AsyncSlot Coroutine to indicate ScanControl Staus.
+        """        
+
+        self.lblStatus.setText("Status: " + self.experiment.device.status) 
+    
 
 
 #******************************************************************************************
