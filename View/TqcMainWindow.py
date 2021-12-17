@@ -27,8 +27,17 @@ class TqcMainWindow(QWidget):
         super().__init__()
         self.experiment = experiment
         self.initUI()
+        self.openSerial()
 
+    
+    def openSerial(self):
+        
+        """Open serial port for communication with QC robot"""
 
+        self.experiment.serial.readyRead.connect(self.receive)
+        self.experiment.serial.open(QIODevice.ReadWrite)
+
+    
     def connectEvents(self):
         
         """
@@ -62,7 +71,9 @@ class TqcMainWindow(QWidget):
         self.btnNewStdRef.clicked.connect(self.experiment.measureStandardRef)
         self.btnNewStdRef.clicked.connect(self.measureStandardRef)
         
-        
+        self.btnInsertCartridge.clicked.connect(self.experiment.insertCartridge)
+        self.btnEjectCartridge.clicked.connect(self.experiment.ejectCartridge)
+
         self.experiment.sensorUpdateReady.connect(self.classifyTDS)
         self.lEditTdsStart.editingFinished.connect(self.validateEditStart)
         self.lEditTdsEnd.setReadOnly(True)
@@ -406,6 +417,18 @@ class TqcMainWindow(QWidget):
 
 
 ##################################### AsyncSlot coroutines #######################################
+
+
+    @asyncSlot()
+    async def receive(self):
+
+        """Receive messages on serial port and redirect to message box"""
+
+        await asyncio.sleep(0.1)
+        while self.experiment.serial.canReadLine():
+            codec = QTextCodec.codecForName("UTF-8")
+            line = codec.toUnicode(self.experiment.serial.readLine()).strip()
+            self.message(line)
 
 
     @asyncSlot()
