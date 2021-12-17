@@ -11,7 +11,7 @@ sys.path.append(MenloAPIDir)
 
 import asyncio
 from asyncio.exceptions import CancelledError
-from asyncqt import QEventLoop, asyncSlot
+from qasync import QEventLoop, asyncSlot
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QApplication, QWidget
 
@@ -53,19 +53,40 @@ class Device(QWidget):
         return "A device object to control Menlo TeraSmart, Device is a subclass of QWidget"
 
 
-    @asyncSlot()
-    async def _statusChanged(self, status):
+    def isAveragingDone(self):
+
+        """ Check if averaging is completed"""
+
+        return self.scanControl.currentAverages==self.scanControl.desiredAverages
+
+
+    def resetAveraging(self):
 
         """
-            AsyncSlot Coroutine to indicate ScanControl Staus.
-        """        
+            Reset scancontrol averages
+        """
 
-        strStatus = str(ScanControlStatus(status).name)
-        self.status = strStatus
-        if not self.status == "Acquiring":
-            self.isAcquiring = False
-        else:
-            self.isAcquiring = True
+        print("> [SCANCONTROL] Resetting averages")
+        self.qcResult = None
+        self.scanControl.resetAveraging()
+
+
+    def connect(self):
+
+        """
+            Connect to TeraSmart
+        """
+        try:
+            self.client.connect()
+        except ConnectionRefusedError:
+             print("""> [ERROR] ConnectionRefused: Please ensure ScanControl is active, Check laser ON, 
+                         Antenna voltage should be enabled for correct operation""")
+
+
+    def done(self, data):
+
+        print("**********************Averaging Done**************************")
+        self.avgResult = data
 
 
     def setBegin(self, begin):
@@ -116,6 +137,21 @@ class Device(QWidget):
 
 
     @asyncSlot()
+    async def _statusChanged(self, status):
+
+        """
+            AsyncSlot Coroutine to indicate ScanControl Staus.
+        """        
+
+        strStatus = str(ScanControlStatus(status).name)
+        self.status = strStatus
+        if not self.status == "Acquiring":
+            self.isAcquiring = False
+        else:
+            self.isAcquiring = True
+
+
+    @asyncSlot()
     async def collectAveragesRepeatedly(self, data):
 
         """
@@ -148,25 +184,7 @@ class Device(QWidget):
             if self.isAveragingDone():
                 avgData = self.pulseData
                 self.dataUpdateReady.emit(avgData)
-            
-
-    def isAveragingDone(self):
-
-        """ Check if averaging is completed"""
-
-        return self.scanControl.currentAverages==self.scanControl.desiredAverages
-
-
-    def resetAveraging(self):
-
-        """
-            Reset scancontrol averages
-        """
-
-        print("> [SCANCONTROL] Resetting averages")
-        self.qcResult = None
-        self.scanControl.resetAveraging()
-
+  
 
     @asyncSlot()    
     async def start(self):
@@ -196,6 +214,8 @@ class Device(QWidget):
             print("> [ERROR] InitalisationError: Menlo ScanControl is not ready. Please follow normal startup using Menlo ScanControl before launching the QC app")
 
 
+##################################### AsyncSlot coroutines #######################################
+
     @asyncSlot()    
     async def stop(self):
 
@@ -211,23 +231,6 @@ class Device(QWidget):
         self.keepRunning = False
         self.avgTask = None
 
-
-    def connect(self):
-
-        """
-            Connect to TeraSmart
-        """
-        try:
-            self.client.connect()
-        except ConnectionRefusedError:
-             print("""> [ERROR] ConnectionRefused: Please ensure ScanControl is active, Check laser ON, 
-                         Antenna voltage should be enabled for correct operation""")
-
-
-    def done(self, data):
-
-        print("**********************Averaging Done**************************")
-        self.avgResult = data
 
 
     @asyncSlot()
