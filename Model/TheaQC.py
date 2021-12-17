@@ -9,10 +9,11 @@ rscDir = os.path.join(baseDir, "Resources")
 configDir = os.path.join(baseDir, "Model")  # if keeping in same dir as model
 sys.path.append(baseDir)
 
+
 from Model.experiment import *
 from Resources import ur
 from MenloLoader import MenloLoader
-
+from PyQt5 import QtSerialPort
 from scipy.signal import find_peaks
 
 
@@ -34,7 +35,27 @@ class TheaQC(Experiment):
             self.initResources()
             self.mLoader = MenloLoader([])          # fileLoader object
             self.TdsWin = self.config['TScan']['window']
+            self.loadRobotConfig()
+            self.initRobot()
 
+
+    def initRobot(self):
+
+        """Initialise robot via serial port"""
+
+        
+        self.serial = QtSerialPort.QSerialPort(self.port)
+        self.serial.setBaudRate(self.baudrate)
+        
+
+    def loadRobotConfig(self):
+
+        """Load serial port config for robot"""
+
+        if self.configLoaded:
+            self.port = self.config['Robots']['port']
+            self.baudrate = self.config['Robots']['baudrate']
+            
 
     def initResources(self):
 
@@ -47,12 +68,8 @@ class TheaQC(Experiment):
         self.avgsOk = False                                   # Flag for required pulse averages validation
         self.waferIdOk = False                                # Flag for wafer ID validation
         self.sensorIdOk = False                               # Flag for sensor ID validation
-    
-        
         self.classification = None                            # Result of TDS pulse classification.
-        
         self.qcAvgTask = None                                 # QC averaging task (automatic - cartridge sensing)
-        
         self.pulsePeaks = None                                # result of peak finding on TDS pulse for classification
         self.qcParams = {}                                    # empty dictionary to hold qc parameters
         self.qcComplete = False                               # Flag to track qc task completeion
@@ -63,6 +80,10 @@ class TheaQC(Experiment):
         self.previousClassification = None                    # previous classification result 
         self.qcResultsList = []                               # empty list to hold accumulated QC data on multiple sensors 
         self.stdRef = None                                    # Standard reference data for QC  
+
+        self.port = None                                      # Serial port name
+        self.baudrate = None                                  # baudrate for serial communication  
+        self.serial = None                                    # Serial object to communicate with robots
 
 
     def initAttribs(self):
@@ -79,20 +100,15 @@ class TheaQC(Experiment):
         self.dcOffset = None                       # DC background correction data
         self.FFT = None                            # FFT of the current pulse data
         self.freq = None                           # frequency (THz)
-        self.configLoaded = False                  # Flag to check if config is loaded
+        
         self.avgProgVal = 0                        # counter for averaging progress bar
-        
-        
         self.numAvgs = None                        # number of set averages
         self.startTime = None                      # TDS pulse start time (ps)
         self.endTime = None                        # TDS pulse end time (ps)
-        
         self.waferId = None                        # QC wafer ID
         self.sensorId = None                       # QC sensor ID
         self.tdsParams = {}                        # Empty dictionary to hold TDS pulse parameters
-        
         self.currentAverageFft = None              # averaged pulse FFT
-        
         self.chipsPerWafer = None                  # Parameter to trigger wafer ID change (not used)
         self.classificationDistance = None         # Pulse peak fitting parameters for classification- distance (see scipy.find_peaks())
         self.classificationProminence = None
@@ -224,6 +240,27 @@ class TheaQC(Experiment):
 
 
 ##################################### AsyncSlot coroutines #######################################
+
+
+    @asyncSlot()
+    async def ejectCartridge(self):
+
+        """Send command on serial to eject cartridge"""
+
+        await asyncio.sleep(0.1)
+        txt = "EJECT\n"
+        self.serial.write(txt.encode())
+
+
+    @asyncSlot()
+    async def insertCartridge(self):
+
+        """Send command on serial to insert cartridge"""
+
+        await asyncio.sleep(0.1)
+        txt = "INSERT\n"
+        self.serial.write(txt.encode())
+
 
     @asyncSlot()
     async def checkNextSensor(self):
