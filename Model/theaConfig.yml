@@ -14,7 +14,7 @@ QC:
   handlingTime: 2s
   lowerFreqBound: 0.5
   maxViolations: 7
-  qcAverages: 40
+  qcAverages: 10
   qcSaveDir: C:\Users\TeraSmart\Documents\API_MenloSystem\RamGlobalSystem\TQC\Export
   sensorId: 1
   stdRefFilePath: C:\Users\TeraSmart\Documents\THEA_Python\TQC\Resources\StandardReferences\071221T151127_WID_W0_SN_1_STANDARD_Reference.txt
@@ -32,6 +32,6 @@ Temp:
   - Air_singleshot.txt
   sensorFileNames:
   - F1_singleshot.txt
-Timelapse:
-  interval: 5s
-  repeats: 3
+Robots:
+  Port: COM6
+  baudrate: 115200
