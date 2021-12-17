@@ -12,7 +12,7 @@ sys.path.append(MenloAPIDir)
 import asyncio
 from asyncio.exceptions import CancelledError
 from qasync import QEventLoop, asyncSlot
-from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtCore import pyqtSignal, QTextCodec
 from PyQt5.QtWidgets import QApplication, QWidget
 
 from Menlo.scancontrolclient import ScanControlClient, ScanControlStatus
