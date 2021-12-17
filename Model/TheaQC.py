@@ -68,12 +68,12 @@ class TheaQC(Experiment):
     def initAttribs(self):
 
         """
-            Initialise class attributes for QC, timelapse application with default values.
+            Initialise class attributes for QC application with default values.
         """
 
         self.pulseAmp = None                       # Received pulse data              
         self.timeAxis = None                       # time data 
-        self.timelapseRunning = False              # Flag to check if timelapse is running
+        
         self.TdsWin = None                         # TDS windowing duration (ps)
         self.dcOffsetFile = None                   # DC offset file path
         self.dcOffset = None                       # DC background correction data
@@ -82,7 +82,7 @@ class TheaQC(Experiment):
         self.configLoaded = False                  # Flag to check if config is loaded
         self.avgProgVal = 0                        # counter for averaging progress bar
         
-        self.tscans = []                           # empty list to contain the timelapse scan data
+        
         self.numAvgs = None                        # number of set averages
         self.startTime = None                      # TDS pulse start time (ps)
         self.endTime = None                        # TDS pulse end time (ps)
@@ -92,8 +92,7 @@ class TheaQC(Experiment):
         self.tdsParams = {}                        # Empty dictionary to hold TDS pulse parameters
         
         self.currentAverageFft = None              # averaged pulse FFT
-        self.frame = None                          # timelapse frame
-        self.frames = None                         # list of timelapse frames  
+        
         self.chipsPerWafer = None                  # Parameter to trigger wafer ID change (not used)
         self.classificationDistance = None         # Pulse peak fitting parameters for classification- distance (see scipy.find_peaks())
         self.classificationProminence = None
@@ -223,6 +222,8 @@ class TheaQC(Experiment):
             self.device.avgTask = None
             self.device.setDesiredAverages(1)
 
+
+##################################### AsyncSlot coroutines #######################################
 
     @asyncSlot()
     async def checkNextSensor(self):
@@ -385,7 +386,6 @@ class TheaQC(Experiment):
             print("DONE")
             
 
-
     @asyncSlot()
     async def cancelTasks(self):
 
@@ -394,9 +394,6 @@ class TheaQC(Experiment):
         """
         print("cancelling tasks")
         try:
-            if self.timelapseTask is not None:
-                print("CANCELLING TLAPSE TASK")
-                self.timelapseTask.cancel()
             if self.device.avgTask is not None:
                 self.device.avgTask.cancel()
                 print("Averaging cancelled")
