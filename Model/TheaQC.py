@@ -47,13 +47,12 @@ class TheaQC(Experiment):
         self.avgsOk = False                                   # Flag for required pulse averages validation
         self.waferIdOk = False                                # Flag for wafer ID validation
         self.sensorIdOk = False                               # Flag for sensor ID validation
-        self.repeatsOk = False                                # Flag for timelapse repeats validation
-        self.intervalOK = False                               # Flag for timelapse duration validation
-        self.tlapseSaveDir = None                             # Path for saving timelapse data
-        self.classification = "Sensor"                            # Result of TDS pulse classification.
+    
+        
+        self.classification = None                            # Result of TDS pulse classification.
         
         self.qcAvgTask = None                                 # QC averaging task (automatic - cartridge sensing)
-        self.timelapseTask = None                             # timelapse task (manual)
+        
         self.pulsePeaks = None                                # result of peak finding on TDS pulse for classification
         self.qcParams = {}                                    # empty dictionary to hold qc parameters
         self.qcComplete = False                               # Flag to track qc task completeion
@@ -82,17 +81,16 @@ class TheaQC(Experiment):
         self.freq = None                           # frequency (THz)
         self.configLoaded = False                  # Flag to check if config is loaded
         self.avgProgVal = 0                        # counter for averaging progress bar
-        self.tlapseProgVal = 0                     # counter for timelapse progress bar
+        
         self.tscans = []                           # empty list to contain the timelapse scan data
         self.numAvgs = None                        # number of set averages
         self.startTime = None                      # TDS pulse start time (ps)
         self.endTime = None                        # TDS pulse end time (ps)
-        self.repeatNum = None                      # number of repeated aquisitions in the timelapse
-        self.interval = None                       # time interval between aquisitions for timelapse
+        
         self.waferId = None                        # QC wafer ID
         self.sensorId = None                       # QC sensor ID
         self.tdsParams = {}                        # Empty dictionary to hold TDS pulse parameters
-        self.pulseLatency = 1                      # time in seconds for processing TDS pulses
+        
         self.currentAverageFft = None              # averaged pulse FFT
         self.frame = None                          # timelapse frame
         self.frames = None                         # list of timelapse frames  
@@ -102,8 +100,9 @@ class TheaQC(Experiment):
         self.classificationWidth = None
         self.classificationThreshold = None
         self.stdRef = None                         # Standard reference TDS pulse data
-
+        self.qcAvgResult = None                    # Store QC averagining result 
         self.qcStep = None
+        self.qcResults = {}                        # Store QC results from current session
 
 
     def loadDcBkg(self):
@@ -274,6 +273,7 @@ class TheaQC(Experiment):
                     await asyncio.gather(self.qcAvgTask)
                     while not self.qcAvgTask.done():
                         await asyncio.sleep(0.5)
+                    self.qcAvgResult = self.device.avgResult
                     self.device.setDesiredAverages(1)
                     self.qcRunNum += 1
             elif (self.previousClassification == "Sensor" and self.classification == 'Air'):
