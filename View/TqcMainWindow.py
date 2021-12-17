@@ -54,7 +54,7 @@ class TqcMainWindow(QWidget):
         
         self.btnResetAvg.clicked.connect(self.experiment.device.resetAveraging)
         self.btnResetAvg.clicked.connect(self.resetAveraging)
-        # self.btnStartTimelapse.clicked.connect(self.startTimelapse)
+       
         self.btnStartQC.clicked.connect(self.startQC)
         self.btnStartQC.clicked.connect(self.experiment.startQC)
         self.btnFinishQC.clicked.connect(self.finishQC)
@@ -68,8 +68,7 @@ class TqcMainWindow(QWidget):
         self.lEditTdsEnd.setReadOnly(True)
         self.lEditTdsAvgs.editingFinished.connect(self.validateEditAverages)
         self.lEditTdsAvgs.textChanged.connect(self.avgsChanged)
-        self.lEditInterval.editingFinished.connect(self.validateEditInterval)
-        self.lEditRepeatNum.editingFinished.connect(self.validateEditRepeats) 
+    
         self.lEditWaferId.editingFinished.connect(self.validateEditWaferId)
         self.lEditSensorId.editingFinished.connect(self.validateEditSensorId)
 
@@ -99,12 +98,6 @@ class TqcMainWindow(QWidget):
                 self.lEditTdsAvgs.setText(str(self.experiment.qcNumAvgs))
                 self.lEditTdsAvgs.editingFinished.emit()
 
-            # while not self.experiment.qcAvgTask.done():
-            #     asyncio.sleep(0.1)
-            # if self.experiment.qcAvgTask.done():
-            #     stdRefPlot = self.plot(self.experiment.freq, 20*np.log(np.abs(self.experiment.stdRef.FFT[0])))
-            #     stdRefPlot.curve.setPen(color = self.colorstdRef, width = self.averagePlotLineWidth)
-
 
     @asyncSlot()
     async def finishQC(self):
@@ -131,7 +124,7 @@ class TqcMainWindow(QWidget):
         self.btnNewStdRef.setEnabled(False)
         self.btnStartAveraging.clicked.emit()
         self.message(f"> [MESSAGE]: RELOADING CONFIG, updating internal reference")
-        self.btnStartTimelapse.setEnabled(True)
+        
     	
 
     @asyncSlot()
@@ -348,12 +341,7 @@ class TqcMainWindow(QWidget):
         self.lEditTdsAvgs.editingFinished.emit()
         self.loadTDSParams()
         print("> [SCANCONTROL] Setting TDS parameters: Done\n")        
-        self.lEditInterval.setText(str(self.experiment.config['Timelapse']['interval']))
-        self.lEditInterval.editingFinished.emit()
-        self.lEditRepeatNum.setText(str(self.experiment.config['Timelapse']['repeats']))
-        self.lEditRepeatNum.editingFinished.emit()
-        self.loadTimelapseParams()
-        print("> [TIMELAPSE] Setting Timelapse parameters: Done\n")
+    
         self.chipsPerWafer = int(self.experiment.config['QC']['chipsPerWafer'])
         self.lEditWaferId.setText(str(self.experiment.config['QC']['waferId']))
         self.lEditWaferId.editingFinished.emit()
@@ -389,21 +377,6 @@ class TqcMainWindow(QWidget):
         else:
             self.btnStartQC.setEnabled(False)
     
-
-    def loadTimelapseParams(self):
-
-        """
-            Load timelapse measurement parameters related to interval and duration.
-        """
-
-
-        if self.experiment.intervalOK and self.experiment.repeatsOk:
-            self.btnStartTimelapse.setEnabled(True)
-            self.lblTlapseStatus.setText("Timelapse: Ready")
-        else:
-            self.btnStartTimelapse.setEnabled(False)
-            self.lblTlapseStatus.setText("Timelapse: Not available")
-
     
     def validateEditAverages(self):
 
@@ -424,63 +397,7 @@ class TqcMainWindow(QWidget):
             print("[ERROR] InvalidInput: Setting default config value")
             self.experiment.avgsOK = False
             self.lEditTdsAvgs.setText(str(self.experiment.config['TScan']['numAvgs']))
-            
-
-    def validateEditInterval(self):
         
-        """
-            Validate user input for timelapse interval - check units for consistency
-        """
-
-        try:
-            self.experiment.intervalOk = False
-            isinstance(ur(self.lEditInterval.text()), ur.Quantity)
-            interval = ur(self.lEditInterval.text())
-            if isinstance(interval, int):
-                interval = interval*ur("s")
-
-            if interval.units in ["second", "minute", "hour"]: 
-                print("Interval is a valid time input")
-                print("Timelapse interval ACCEPTED")
-                self.experiment.interval = interval.m_as("second")
-                print(f"Interval is set to {self.experiment.interval} seconds")
-            else:
-                print("Interval units are not valid time inputs, Setting default config values")
-                print("Enter valid units, for example: '0.5hour', '420ms', '5min' . . . ")
-                self.lEditInterval.setText(str(self.experiment.config['Timelapse']['interval']))
-                self.interval = ur(str(self.experiment.config['Timelapse']['interval'])).m_as("second")
-            self.experiment.intervalOK = True
-        except UndefinedUnitError:
-            self.experiment.intervalOK = False
-            print("Undefined / Incorrect units. Setting default config value")
-            self.lEditInterval.setText(str(self.experiment.config['Timelapse']['interval']))
-            self.experiment.interval = ur(str(self.experiment.config['Timelapse']['interval']))
-            self.experiment.intervalOK = True
-            
-    
-    def validateEditRepeats(self):
-        
-        """
-            Validate user input for timelapse repeats - check units and dimensions for consistency
-        """
-
-        self.experiment.repeatsOk = False
-        validationRule = QIntValidator(1,2000)
-            
-        print(validationRule.validate(self.lEditRepeatNum.text(),2000))
-        if validationRule.validate(self.lEditRepeatNum.text(),
-                                   2000)[0] == QValidator.Acceptable:
-            print("Timelapse frames count ACCEPTED")
-            self.experiment.repeatNum = int(self.lEditRepeatNum.text())
-            
-        else:
-            print("Repeats must be non zero integers")
-            
-            self.experiment.repeatNum = int(self.experiment.config['Timelapse']['repeats'])
-            print(f"Setting default config value: {self.experiment.repeatNum} frames")
-            self.lEditRepeatNum.setText(str(self.experiment.repeatNum))
-        self.experiment.repeatsOk = True
-
 
     def validateEditWaferId(self):
 
@@ -562,8 +479,6 @@ class TqcMainWindow(QWidget):
         self.lEditTdsStart.setAlignment(Qt.AlignCenter) 
         self.lEditTdsEnd.setAlignment(Qt.AlignCenter) 
         self.lEditTdsAvgs.setAlignment(Qt.AlignCenter) 
-        self.lEditInterval.setAlignment(Qt.AlignCenter) 
-        self.lEditRepeatNum.setAlignment(Qt.AlignCenter) 
         self.lEditWaferId.setAlignment(Qt.AlignCenter) 
         self.lEditSensorId.setAlignment(Qt.AlignCenter) 
 
@@ -581,7 +496,7 @@ class TqcMainWindow(QWidget):
 
     def initUI(self):
 
-        uic.loadUi("../View/Designer/MainWindow.ui", self)
+        uic.loadUi("../View/Designer/MainWindow2.ui", self)
         self.setWindowTitle("THEA QC v1.05")
         self.disableButtons()
         self.loadIcons()
@@ -597,7 +512,7 @@ class TqcMainWindow(QWidget):
         
         self.textbox.setReadOnly(True)
         self.progAvg.setValue(self.experiment.avgProgVal)
-        self.progTimelapse.setValue(self.experiment.tlapseProgVal)
+        
 
 
     def disableButtons(self):
@@ -609,7 +524,7 @@ class TqcMainWindow(QWidget):
         self.btnStart.setEnabled(False)
         self.btnResetAvg.setEnabled(False)
         self.btnStartAveraging.setEnabled(False)
-        self.btnStartTimelapse.setEnabled(False)
+        
         self.btnStartQC.setEnabled(False)
         self.btnFinishQC.setEnabled(False)
         self.btnNewStdRef.setEnabled(False)
@@ -621,7 +536,7 @@ class TqcMainWindow(QWidget):
             Enable GUI buttons for user interaction
         """
 
-        self.btnStartTimelapse.setEnabled(True)
+        
         self.btnStart.setEnabled(True)
         self.btnStop.setEnabled(True)
         self.btnStartQC.setEnabled(True)
@@ -636,10 +551,6 @@ class TqcMainWindow(QWidget):
         """
 
         self.textbox.appendPlainText(f"{msgStrPattern}")
-
-
-
-
 
 
 
