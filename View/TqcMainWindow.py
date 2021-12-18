@@ -53,7 +53,7 @@ class TqcMainWindow(QWidget):
         self.experiment.qcUpdateReady.connect(self.qcResult)
         self.experiment.sensorUpdateReady.connect(self.checkNextSensor)     
         self.livePlot.scene().sigMouseMoved.connect(self.mouseMoved)
-        self.dataUpdateReady.connect(self.updatePlot)
+        
         
         self.btnStartAveraging.clicked.connect(self.experiment.startAveraging)
         self.btnStart.clicked.connect(self.experiment.device.start)
@@ -131,18 +131,6 @@ class TqcMainWindow(QWidget):
         """   
 
         return self.livePlot.plot(x,y)
-
-
-    def updatePlot(self, avgPulseFft):
-        
-        """
-            Update plot items.
-
-            :type avgPulseFft: numpy array
-            :param avgPulseFft: averaged value of FFT pulse (in progress)
-        """
-
-        self.experiment.plotDataContainer['currentAveragePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(avgPulseFft)))
 
 
     def validateEditStart(self):
@@ -519,8 +507,7 @@ class TqcMainWindow(QWidget):
         """"Update averaging progress bar"""
         
         await asyncio.sleep(0.01)
-        self.progAvg.setValue(int(self.experiment.device.scanControl.currentAverages/\
-                                 self.experiment.device.scanControl.desiredAverages*100))
+        self.progAvg.setValue(int(self.experiment.avgProgVal))
 
 
     @asyncSlot()
@@ -549,19 +536,13 @@ class TqcMainWindow(QWidget):
 
         if self.experiment.device.isAcquiring:
             self.lEditTdsAvgs.setText(str(self.experiment.device.numAvgs))
-            # self.lEditTdsAvgs.editingFinished.emit()
+            
             if self.plotDataContainer['livePulseFft'] is None :
                 self.plotDataContainer['livePulseFft'] = self.plot(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
                 self.plotDataContainer['livePulseFft'].curve.setPen(color = self.colorLivePulse, width = self.averagePlotLineWidth)
-            elif self.plotDataContainer['livePulseFft'] is not None and self.experiment.avgProgVal < 100 :
+            elif self.plotDataContainer['livePulseFft'] is not None and self.experiment.avgProgVal <= 100 : 
                 self.plotDataContainer['livePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
                 self.plotDataContainer['livePulseFft'].curve.setPen(color = self.colorLivePulse, width = self.averagePlotLineWidth)
-                
-            elif self.plotDataContainer['livePulseFft'] is not None and self.experiment.avgProgVal == 100:
-                
-                self.plotDataContainer['livePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
-                self.plotDataContainer['livePulseFft'].curve.setPen(color = self.colorlivePulseBackground, width = self.livePlotLineWidth)
-                self.plotDataContainer['currentAveragePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(self.experiment.currentAverageFft)))
             self.checkNextSensor()
             
 
