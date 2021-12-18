@@ -364,6 +364,8 @@ class TheaQC(Experiment):
         self.pulseAmp = self.pulseAmp.copy()
         self.classifyTDS()                            # Live Cartridge sensing
         self.freq, self.FFT = self.calculateFFT(self.timeAxis,self.pulseAmp)
+        self.avgProgVal = self.device.scanControl.currentAverages/\
+                                 self.device.scanControl.desiredAverages*100
         self.checkNextSensor()
         await asyncio.sleep(0.1)
         
