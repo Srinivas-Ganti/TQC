@@ -1,0 +1,17 @@
+
+Export:
+  filename: data.dat
+  saveDir: C:\Users\TeraSmart\Documents\TimelapseExport
+Spectrometer:
+  name: TERASMART
+  systemNum: 9
+TScan:
+  begin: -271
+  numAvgs: 40
+  window: 400     
+Timelapse:
+  interval: 3min # units of time - s, min, hr, day ...
+  frames: 0 # zero to run out max storage, enter int for other specified values.
+  maxStorage: 2GB # max storage for timelapse session - kB, MB, GB
+  _filesize : 606 kB # typical filesize - private!
+
