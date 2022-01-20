@@ -29,13 +29,21 @@ class TheaTimelapse(Experiment):
 
     def initialise(self):
 
+        """
+            Initialise experiment parameters
+        """
+
+
         if self.configLoaded:
             self.initAttribs()
             self.initResources()
+            
             self.mLoader = MenloLoader([])          # fileLoader object
             self.TdsWin = self.config['TScan']['window']
             self.maxStorage = self.config['Timelapse']['maxStorage']
             self.filesize =  self.config['Timelapse']['_filesize']
+            self.exportPath = self.config['Export']['saveDir']
+            self.checkSessionStorage()
 
 
     def initResources(self):
@@ -81,6 +89,12 @@ class TheaTimelapse(Experiment):
         self.maxFrames = None                      # Upper limit for frames viz maxStorage
     
 
+    def checkSessionStorage(self):
+
+        """Compute maximum allowable frames to be saved"""
+
+        self.maxFrames = int(ur(self.maxStorage).m_as('kB')/ur(self.filesize).m_as('kB'))
+
 
     def findResonanceMinima(self,data):
 
@@ -125,8 +139,8 @@ class TheaTimelapse(Experiment):
         self.pulseAmp = self.pulseAmp.copy()
         
         self.freq, self.FFT = self.calculateFFT(self.timeAxis,self.pulseAmp)
-        self.avgProgVal = self.device.scanControl.currentAverages/\
-                                 self.device.scanControl.desiredAverages*100
+        self.avgProgVal = int(self.device.scanControl.currentAverages/\
+                                 self.device.scanControl.desiredAverages*100)
         #self.tlapseProgVal = self.numRequestedFrames/self.maxFrames*100  # check later
         await asyncio.sleep(0.1)
         
@@ -157,25 +171,49 @@ class TheaTimelapse(Experiment):
             print("DONE")
             rawExportData = np.vstack([self.timeAxis, self.pulseAmp]).T
             currentDatetime = datetime.now()
-            header = f"""THEA QC - RAM Group GmbH, powered by Menlo Systems\nProgram Version 1.04\nAverage over {self.numAvgs} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}
+            header = f"""THEA TIMELAPSE - RAM Group GmbH, powered by Menlo Systems\nProgram Version 0.2\nAverage over {self.numAvgs} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}
     User time axis shift: {self.config['TScan']['begin']*-1}
     Time [ps]              THz Signal [mV]"""
-            base_name = f"""{currentDatetime.strftime("%d%m%yT%H%M%S")}_WID_{self.waferId}_SN_{self.sensorId}_Reference"""
-            exportPath = os.path.join(self.qcSaveDir, base_name)
+            base_name = f"""{currentDatetime.strftime("%d%m%yT%H%M%S")}_{self.currentFrame}"""
+            exportPath = os.path.join(self.exportPath, base_name)
             data_file = os.path.join(exportPath.replace("/","\\") +'.txt')
             print(data_file)
             np.savetxt(data_file, rawExportData, header = header, delimiter = '\t' )  
             
 
     @asyncSlot()
+    async def nextFrame(self):
+
+        """Do a new scan"""
+
+        self.device.resetAveraging()
+        await self.startAveraging()
+
+
+
+    @asyncSlot()
     async def timelapseStart(self):
-        if self.device.isAveragingDone():
-            self.device.setDesiredAverages(self.numAvgs)
+
+        try:
+            if self.numRequestedFrames == 0:     
+                self.numRequestedFrames = self.maxFrames
+
+            for i in range(self.numRequestedFrames):
+                if i+1 < self.numRequestedFrames:
+                    print(f"[TIMELAPSE]: FRAME {i+1}/{self.numRequestedFrames}")
+                    await self.nextFrame()
+                    print(f"[TIMELAPSE]: AWAITING INTERVAL TIMEOUT . . . {self.interval} seconds ")
+                    await asyncio.sleep(self.interval)
+                else:
+                    print(f"[TIMELAPSE]: FRAME {i+1}/{self.numRequestedFrames}")
+                    await self.nextFrame()
+            print(f"[TIMELAPSE]: FINISHED FRAMES {i+1}/{self.numRequestedFrames}")
+
+        except asyncio.exceptions.CancelledError:
+            print("CANCELLED TIMELAPSE")        
+
             
-        
-        self.device.avgTask = asyncio.ensure_future(self.device.doAvgTask())
-        await asyncio.gather(self.device.avgTask)
-            
+  
 
     @asyncSlot()
     async def cancelTasks(self):
