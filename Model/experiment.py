@@ -61,7 +61,7 @@ class Experiment(QWidget):
         self.device.resetAveraging()
         self.device.setBegin(self.config['TScan']['begin'])
         self.device.setEnd(float(self.config['TScan']['begin']) + float(self.config['TScan']['window']))
-        self.device.setDesiredAverages(1) # default to single shot unless in averaging task
+        # self.device.setDesiredAverages(1) # default to single shot unless in averaging task
         
 
     def saveAverageData(self, data, path = "default"):
