@@ -34,6 +34,7 @@ class Device(QWidget):
             self.client = ScanControlClient(loop = loop)
             self.connect()
             self.scanControl = self.client.scancontrol
+            self.numAvgs = None
             self.isAcquiring = False                   # Flag to check if pulses are being received
             self.keepRunning = False                   # Flag to keep runnning the processing of TDS pulses
             self.pulseReady = self.scanControl.pulseReady
@@ -67,7 +68,7 @@ class Device(QWidget):
         """
 
         print("> [SCANCONTROL] Resetting averages")
-        self.qcResult = None
+        # self.qcResult = None
         self.scanControl.resetAveraging()
 
 
