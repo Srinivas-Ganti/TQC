@@ -7,31 +7,33 @@ Classification:
   width: 500
 Export:
   filename: data.dat
-  saveDir: C:\Users\TeraSmart\Documents\API_MenloSystem\RamGlobalSystem\TQC\Export
+  saveDir: C:\Users\TeraSmart\Documents\QC\01062022\Batch4
+  
 QC:
   allowedErrordB: 1.25
-  chipsPerWafer: 75
+  chipsPerWafer: 10000
   handlingTime: 2s
   lowerFreqBound: 0.5
   maxViolations: 7
   qcAverages: 10
-  qcSaveDir: C:\Users\TeraSmart\Documents\API_MenloSystem\RamGlobalSystem\TQC\Export
+  qcSaveDir: C:\Users\TeraSmart\Documents\QC\01062022\Batch4
   sensorId: 1
+  stdRefFileName: C:\Users\TeraSmart\Documents\THEA_Python\TQC\Resources\StandardReferences\030122T143008_WID_W0_SN_1_STANDARD_Reference.txt
   stdRefFilePath: C:\Users\TeraSmart\Documents\THEA_Python\TQC\Resources\StandardReferences\071221T151127_WID_W0_SN_1_STANDARD_Reference.txt
   upperFreqBound: 0.9
   waferId: W0000
+Robots:
+  baudrate: 115200
+  port: COM6
 Spectrometer:
   name: TERASMART
   systemNum: 0
 TScan:
-  begin: -320
-  numAvgs: 10
+  begin: -271
+  numAvgs: 40
   window: 400
 Temp:
   airFileNames:
   - Air_singleshot.txt
   sensorFileNames:
   - F1_singleshot.txt
-Robots:
-  Port: COM6
-  baudrate: 115200
