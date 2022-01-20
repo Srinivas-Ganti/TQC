@@ -96,6 +96,15 @@ class TqcMainWindow(QWidget):
         if self.experiment.qcRunNum > 0:
             self.lEditSensorId.setText(str(self.experiment.sensorId))
 
+            # if self.experiment.qcResult is None:
+                
+            #     self.lblQcStatusIcon.setPixmap(QPixmap("Icons/hourglass--arrow.png"))
+            #     self.lblQcStatusIcon.setScaledContents(True)
+            #     self.qCcurrentMsg.setText("NEXT SENSOR")
+
+            
+
+
 
     def mouseMoved(self, evt):
 
@@ -401,7 +410,12 @@ class TqcMainWindow(QWidget):
 
             if isinstance(self.experiment.numAvgs, int):
                 self.lEditTdsAvgs.setText(str(self.experiment.qcNumAvgs))
-                self.lEditTdsAvgs.editingFinished.emit()
+                self.lEditTdsAvgs.editingFinished.emit()    
+        
+            stdRefPlot = self.plot(self.experiment.freq, 20*np.log(np.abs(self.experiment.stdRef.FFT[0])))
+            stdRefPlot.curve.setPen(color = self.colorstdRef, width = self.averagePlotLineWidth)
+
+
 
 
 ##################################### AsyncSlot coroutines #######################################
@@ -441,7 +455,7 @@ class TqcMainWindow(QWidget):
         await asyncio.sleep(0.01)
         self.message("> [MESSAGE]: Recording new standard reference for QC . . .")
         self.btnNewStdRef.setEnabled(False)
-        self.btnStartAveraging.clicked.emit()
+        # self.btnStartAveraging.clicked.emit()
         self.message(f"> [MESSAGE]: RELOADING CONFIG, updating internal reference")
         
     	
@@ -451,20 +465,20 @@ class TqcMainWindow(QWidget):
         """Update graphics with latest QC results"""
 
         if self.experiment.qcResult == "FAIL":
+            self.plotDataContainer['currentAveragePulseFft'] = self.plot(self.experiment.freq, 20*np.log(np.abs(self.experiment.qcAvgFFT))) 
             self.plotDataContainer['currentAveragePulseFft'].curve.setPen(color = self.colorFail, width = self.averagePlotLineWidth)
             self.lblQcStatusIcon.setPixmap(QPixmap("Icons/cross-circle.png"))
             self.lblQcStatusIcon.setScaledContents(True)
             self.qCcurrentMsg.setText("Result: QC FAIL")
-            self.qCcurrentMsg.setText("Result: QC FAIL")
-            self.message(f"{self.waferId}_{self.sensorId} : {self.qcResult}")
+            self.message(f"{self.experiment.waferId}_{self.experiment.sensorId} : {self.experiment.qcResult}")
          
         elif self.experiment.qcResult == "PASS":
-            
+            self.plotDataContainer['currentAveragePulseFft'] = self.plot(self.experiment.freq, 20*np.log(np.abs(self.experiment.qcAvgFFT))) 
             self.plotDataContainer['currentAveragePulseFft'].curve.setPen(color = self.colorPass, width = self.averagePlotLineWidth)
             self.lblQcStatusIcon.setPixmap(QPixmap("Icons/tick-circle.png"))
             self.lblQcStatusIcon.setScaledContents(True)
             self.qCcurrentMsg.setText("Result: QC PASS")
-            self.message(f"{self.waferId}_{self.sensorId} : {self.qcResult}")
+            self.message(f"{self.experiment.waferId}_{self.experiment.sensorId} : {self.experiment.qcResult}")
 
 
     @asyncSlot()
@@ -543,6 +557,7 @@ class TqcMainWindow(QWidget):
             elif self.plotDataContainer['livePulseFft'] is not None and self.experiment.avgProgVal <= 100 : 
                 self.plotDataContainer['livePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
                 self.plotDataContainer['livePulseFft'].curve.setPen(color = self.colorLivePulse, width = self.averagePlotLineWidth)
+
             self.checkNextSensor()
             
 
