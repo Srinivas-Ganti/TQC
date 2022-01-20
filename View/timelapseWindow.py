@@ -55,7 +55,7 @@ class TimelapseMainWindow(QMainWindow):
         self.lEditTdsEnd.setReadOnly(True)
         self.lEditTdsAvgs.editingFinished.connect(self.validateEditAverages)
 
-        self.lEditFrames.editingFinished.connect(self.validateFrames)
+        self.lEditFrames.editingFinished.connect(self.validateEditFrames)
         self.lEditInterval.editingFinished.connect(self.validateInterval)
         self.lEditTdsAvgs.textChanged.connect(self.avgsChanged)
     
@@ -66,6 +66,10 @@ class TimelapseMainWindow(QMainWindow):
         
 
     def validateInterval(self):
+
+        """
+            Validate user input for Requested Interval of the timelapse
+        """ 
 
         try:
             isinstance(ur(self.lEditInterval.text()), ur.Quantity)
@@ -91,15 +95,25 @@ class TimelapseMainWindow(QMainWindow):
             self.experiment.intervalOk = True
         
 
-    def validateFrames(self):
+    def validateEditFrames(self):
 
-        maxNumFiles = int(ur(self.experiment.maxStorage).m_as('kB')/ur(self.experiment.filesize).m_as('kB'))
-        validationRule = QIntValidator(0,maxNumFiles)
-        print(validationRule.validate(self.lEditFrames.text(),maxNumFiles))
+        
+        """
+            Validate user input for Requested Frames of the timelapse
+        """ 
+        
+        validationRule = QIntValidator(0,self.experiment.maxFrames)
+        print(validationRule.validate(self.lEditFrames.text(),self.experiment.maxFrames))
         if validationRule.validate(self.lEditFrames.text(),
-                                   maxNumFiles)[0] == QValidator.Acceptable:
-            print("Timelapse frames accepted")
+                                   self.experiment.maxFrames)[0] == QValidator.Acceptable:
+            print(f"TIMELAPSE FRAMES ACCEPTED")
             self.experiment.framesOk = True
+            self.experiment.numRequestedFrames = int(self.lEditFrames.text())
+        else:
+            print(f"> [WARNING]:Requested frames exceed allowed storage of {self.experiment.maxStorage}")
+            print(f"Setting frames to default maximum: {self.experiment.maxFrames} ")
+            self.experiment.numRequestedFrames = self.experiment.maxFrames
+            self.lEditFrames.setText(str(self.experiment.numRequestedFrames))
 
 
     def validateEditStart(self):
@@ -189,7 +203,7 @@ class TimelapseMainWindow(QMainWindow):
             Initialise class attributes for QC application with default values.
         """
 
-        self.height = 350
+        self.height = 450
         self.width = 450
         self.left = 10
         self.top = 40      
@@ -245,6 +259,14 @@ class TimelapseMainWindow(QMainWindow):
         self.enableButtons()
       
 
+    @asyncSlot()
+    async def resetAveraging(self):
+
+        """"Reset averaging progress bar"""
+
+        await asyncio.sleep(0.01)
+        self.progAvg.setValue(0)
+
 
     @asyncSlot()
     async def processPulses(self,data):
@@ -254,7 +276,8 @@ class TimelapseMainWindow(QMainWindow):
         await asyncio.sleep(0.01)
 
         if self.experiment.device.isAcquiring:
-            self.lEditTdsAvgs.setText(str(self.experiment.device.numAvgs))
+            self.lEditTdsAvgs.setText(str(self.experiment.numAvgs))
+            self.progAvg.setValue(self.experiment.avgProgVal)
             
 
     @asyncSlot()
