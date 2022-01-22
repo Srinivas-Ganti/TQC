@@ -47,6 +47,7 @@ class TimelapseMainWindow(QMainWindow):
         self.experiment.device.dataUpdateReady.connect(self.experiment.device.done)
       
         self.btnStart.clicked.connect(self.experiment.timelapseStart)
+        self.btnStart.clicked.connect(self.disableLEdit)
         self.btnStop.clicked.connect(self.experiment.device.stop) 
         self.btnStop.clicked.connect(self.stop) 
         self.btnStop.clicked.connect(self.experiment.cancelTasks)
@@ -59,6 +60,29 @@ class TimelapseMainWindow(QMainWindow):
         self.lEditInterval.editingFinished.connect(self.validateInterval)
         self.lEditTdsAvgs.textChanged.connect(self.avgsChanged)
     
+
+
+    def disableLEdit(self):
+
+        """"Disable line edit fields during acquisition"""
+
+        self.lEditTdsStart.setReadOnly(True)
+        self.lEditTdsAvgs.setReadOnly(True)
+        self.lEditFrames.setReadOnly(True)
+        self.lEditInterval.setReadOnly(True)
+
+
+    def enableLEdit(self):
+
+        """"Disable line edit fields during acquisition"""
+
+        self.lEditTdsStart.setReadOnly(False)
+        self.lEditTdsAvgs.setReadOnly(False)
+        self.lEditFrames.setReadOnly(False)
+        self.lEditInterval.setReadOnly(False)
+
+
+
 
     def avgsChanged(self):
 
@@ -243,6 +267,7 @@ class TimelapseMainWindow(QMainWindow):
         self.btnStart.setEnabled(True)
         self.btnStop.setEnabled(True)
         
+        
 
 
 
@@ -257,6 +282,9 @@ class TimelapseMainWindow(QMainWindow):
         await asyncio.sleep(0.1)
         
         self.enableButtons()
+        self.progTlapse.setValue(self.experiment.tlapseProgVal)
+        self.progAvg.setValue(self.experiment.avgProgVal)
+        self.enableLEdit()
         
 
     @asyncSlot()
@@ -281,7 +309,7 @@ class TimelapseMainWindow(QMainWindow):
             self.progTlapse.setValue(self.experiment.tlapseProgVal)
             self.lblFrameCount.setText(f"Frame count: {self.experiment.numFramesDone}/{self.experiment.numRequestedFrames}")
 
-            
+
     @asyncSlot()
     async def _statusChanged(self, status):
 
