@@ -88,6 +88,8 @@ class TheaTimelapse(Experiment):
         self.maxStorage = None                     # maximum allocated data storage loaded from config file
         self.maxFrames = None                      # Upper limit for frames viz maxStorage
         self.numFramesDone = 0                     # variable to mark timelapse progress 
+        self.timelapseTask = None
+        self.continueTimelapse = None               # flag to control/ suspend aqcuisition
 
     def checkSessionStorage(self):
 
@@ -196,21 +198,25 @@ class TheaTimelapse(Experiment):
     async def timelapseStart(self):
 
         try:
+            self.continueTimelapse = True
             if self.numRequestedFrames == 0:     
                 self.numRequestedFrames = self.maxFrames
-
             for i in range(self.numRequestedFrames):
-
+                if self.continueTimelapse:       
+                    print(f"[TIMELAPSE]: FRAME {i+1}/{self.numRequestedFrames}")
                 
-                print(f"[TIMELAPSE]: FRAME {i+1}/{self.numRequestedFrames}")
-                await self.nextFrame()
-                self.tlapseProgVal = int((i+1)/self.numRequestedFrames*100)
-                print(f"[TIMELAPSE]: {self.tlapseProgVal}% - FRAME {i+1}/{self.numRequestedFrames}")
+                    self.timelapseTask =  asyncio.ensure_future(self.nextFrame())
+                    
+                    asyncio.gather(self.timelapseTask)
+                    while not self.timelapseTask.done():
+                        await asyncio.sleep(1)
+                    self.tlapseProgVal = int((i+1)/self.numRequestedFrames*100)
+                    print(f"[TIMELAPSE]: {self.tlapseProgVal}% - FRAME {i+1}/{self.numRequestedFrames}")
 
-                if i+1 < self.numRequestedFrames:
-                    print(f"[TIMELAPSE]: AWAITING INTERVAL TIMEOUT . . . {self.interval} seconds ")
-                    await asyncio.sleep(self.interval) 
-            print(f"[TIMELAPSE]: {self.tlapseProgVal}% FINISHED - FRAMES {i+1}/{self.numRequestedFrames} DONE")
+                    if i+1 < self.numRequestedFrames:
+                        print(f"[TIMELAPSE]: AWAITING INTERVAL TIMEOUT . . . {self.interval} seconds ")
+                        await asyncio.sleep(self.interval) 
+                    print(f"[TIMELAPSE]: {self.tlapseProgVal}% FINISHED - FRAMES {i+1}/{self.numRequestedFrames} DONE")
 
         except asyncio.exceptions.CancelledError:
             print("CANCELLED TIMELAPSE")        
@@ -228,10 +234,12 @@ class TheaTimelapse(Experiment):
         try:
             if self.device.avgTask is not None:
                 self.device.avgTask.cancel()
+                self.timelapseTask.cancel()
                 print("Averaging cancelled")
                 self.avgProgVal = 0
                 self.tlapseProgVal = 0
                 self.numFramesDone = 0
+                self.continueTimelapse = False
         
         except CancelledError:
             print("Shutting down tasks")
