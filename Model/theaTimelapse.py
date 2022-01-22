@@ -14,7 +14,7 @@ sys.path.append(baseDir)
 from Model.experiment import *
 from Resources import ur
 from MenloLoader import MenloLoader
-from PyQt5 import QtSerialPort
+
 from scipy.signal import find_peaks
 
 
@@ -85,9 +85,9 @@ class TheaTimelapse(Experiment):
         self.currentFrame = None                   # current frame to be saved
         self.numData = None                        # progress ctr for timelapse         
         self.filesize = None                       # filesize in kB , +1 kB for safety 
-        self.maxStorage = None
+        self.maxStorage = None                     # maximum allocated data storage loaded from config file
         self.maxFrames = None                      # Upper limit for frames viz maxStorage
-    
+        self.numFramesDone = 0                     # variable to mark timelapse progress 
 
     def checkSessionStorage(self):
 
@@ -188,6 +188,7 @@ class TheaTimelapse(Experiment):
 
         self.device.resetAveraging()
         await self.startAveraging()
+        self.numFramesDone +=1
 
 
 
@@ -199,15 +200,17 @@ class TheaTimelapse(Experiment):
                 self.numRequestedFrames = self.maxFrames
 
             for i in range(self.numRequestedFrames):
+
+                
+                print(f"[TIMELAPSE]: FRAME {i+1}/{self.numRequestedFrames}")
+                await self.nextFrame()
+                self.tlapseProgVal = int((i+1)/self.numRequestedFrames*100)
+                print(f"[TIMELAPSE]: {self.tlapseProgVal}% - FRAME {i+1}/{self.numRequestedFrames}")
+
                 if i+1 < self.numRequestedFrames:
-                    print(f"[TIMELAPSE]: FRAME {i+1}/{self.numRequestedFrames}")
-                    await self.nextFrame()
                     print(f"[TIMELAPSE]: AWAITING INTERVAL TIMEOUT . . . {self.interval} seconds ")
-                    await asyncio.sleep(self.interval)
-                else:
-                    print(f"[TIMELAPSE]: FRAME {i+1}/{self.numRequestedFrames}")
-                    await self.nextFrame()
-            print(f"[TIMELAPSE]: FINISHED FRAMES {i+1}/{self.numRequestedFrames}")
+                    await asyncio.sleep(self.interval) 
+            print(f"[TIMELAPSE]: {self.tlapseProgVal}% FINISHED - FRAMES {i+1}/{self.numRequestedFrames} DONE")
 
         except asyncio.exceptions.CancelledError:
             print("CANCELLED TIMELAPSE")        
@@ -226,7 +229,10 @@ class TheaTimelapse(Experiment):
             if self.device.avgTask is not None:
                 self.device.avgTask.cancel()
                 print("Averaging cancelled")
-           
+                self.avgProgVal = 0
+                self.tlapseProgVal = 0
+                self.numFramesDone = 0
+        
         except CancelledError:
             print("Shutting down tasks")
 
