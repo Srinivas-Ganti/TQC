@@ -10,8 +10,8 @@ TScan:
   numAvgs: 10
   window: 400     
 Timelapse:
-  interval: 15s # units of time - s, min, hr, day ...
-  frames: 0 # zero to run out max storage, enter int for other specified values.
+  interval: 5s # units of time - s, min, hr, day ...
+  frames: 3 # zero to run out max storage, enter int for other specified values.
   maxStorage: 2GB # max storage for timelapse session - kB, MB, GB
   _filesize : 606 kB # typical filesize - private!
 
