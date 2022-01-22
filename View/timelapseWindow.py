@@ -257,7 +257,7 @@ class TimelapseMainWindow(QMainWindow):
         await asyncio.sleep(0.1)
         
         self.enableButtons()
-      
+        
 
     @asyncSlot()
     async def resetAveraging(self):
@@ -278,8 +278,10 @@ class TimelapseMainWindow(QMainWindow):
         if self.experiment.device.isAcquiring:
             self.lEditTdsAvgs.setText(str(self.experiment.numAvgs))
             self.progAvg.setValue(self.experiment.avgProgVal)
-            
+            self.progTlapse.setValue(self.experiment.tlapseProgVal)
+            self.lblFrameCount.setText(f"Frame count: {self.experiment.numFramesDone}/{self.experiment.numRequestedFrames}")
 
+            
     @asyncSlot()
     async def _statusChanged(self, status):
 
