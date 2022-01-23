@@ -353,6 +353,7 @@ class TqcMainWindow(QWidget):
         self.textbox.setReadOnly(True)
         self.progAvg.setValue(self.experiment.avgProgVal)
         
+        
 
     def disableButtons(self):
 
@@ -553,10 +554,9 @@ class TqcMainWindow(QWidget):
             
             if self.plotDataContainer['livePulseFft'] is None :
                 self.plotDataContainer['livePulseFft'] = self.plot(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
-                self.plotDataContainer['livePulseFft'].curve.setPen(color = self.colorLivePulse, width = self.averagePlotLineWidth)
-            elif self.plotDataContainer['livePulseFft'] is not None and self.experiment.avgProgVal <= 100 : 
-                self.plotDataContainer['livePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
-                self.plotDataContainer['livePulseFft'].curve.setPen(color = self.colorLivePulse, width = self.averagePlotLineWidth)
+                
+            self.plotDataContainer['livePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
+            self.plotDataContainer['livePulseFft'].curve.setPen(color = self.colorLivePulse, width = self.averagePlotLineWidth)
 
             self.checkNextSensor()
             
