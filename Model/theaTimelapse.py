@@ -20,7 +20,8 @@ from scipy.signal import find_peaks
 
 class TheaTimelapse(Experiment):
 
-    
+    timelapseFinished = pyqtSignal()
+
     def __init__(self, loop = None, configFile = None):
         
         super().__init__(loop, configFile)
@@ -89,7 +90,9 @@ class TheaTimelapse(Experiment):
         self.maxFrames = None                      # Upper limit for frames viz maxStorage
         self.numFramesDone = 0                     # variable to mark timelapse progress 
         self.timelapseTask = None
-        self.continueTimelapse = None               # flag to control/ suspend aqcuisition
+        self.continueTimelapse = None              # flag to control/ suspend aqcuisition
+        self.timelapseDone = False                 # flag to control progress
+
 
     def checkSessionStorage(self):
 
@@ -147,7 +150,6 @@ class TheaTimelapse(Experiment):
         await asyncio.sleep(0.1)
         
  
-
     @asyncSlot()
     async def startAveraging(self, numAvgs = None):
 
@@ -176,36 +178,37 @@ class TheaTimelapse(Experiment):
             header = f"""THEA TIMELAPSE - RAM Group GmbH, powered by Menlo Systems\nProgram Version 0.2\nAverage over {self.numAvgs} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}
     User time axis shift: {self.config['TScan']['begin']*-1}
     Time [ps]              THz Signal [mV]"""
-            base_name = f"""{currentDatetime.strftime("%d%m%yT%H%M%S")}_{self.currentFrame}"""
+            base_name = f"""{currentDatetime.strftime("%d%m%yT%H%M%S")}_data{self.numFramesDone+1:04d}"""
             exportPath = os.path.join(self.exportPath, base_name)
             data_file = os.path.join(exportPath.replace("/","\\") +'.txt')
             print(data_file)
             np.savetxt(data_file, rawExportData, header = header, delimiter = '\t' )  
+            self.numFramesDone +=1
             
 
     @asyncSlot()
-    async def nextFrame(self):
+    async def newScan(self):
 
         """Do a new scan"""
 
         self.device.resetAveraging()
         await self.startAveraging()
-        self.numFramesDone +=1
-
-
+        
 
     @asyncSlot()
     async def timelapseStart(self):
 
         try:
+            self.timelapseDone = False
             self.continueTimelapse = True
+            self.timelapseFinished.emit()
             if self.numRequestedFrames == 0:     
                 self.numRequestedFrames = self.maxFrames
             for i in range(self.numRequestedFrames):
                 if self.continueTimelapse:       
                     print(f"[TIMELAPSE]: FRAME {i+1}/{self.numRequestedFrames}")
                 
-                    self.timelapseTask =  asyncio.ensure_future(self.nextFrame())
+                    self.timelapseTask =  asyncio.ensure_future(self.newScan())
                     
                     asyncio.gather(self.timelapseTask)
                     while not self.timelapseTask.done():
@@ -217,12 +220,16 @@ class TheaTimelapse(Experiment):
                         print(f"[TIMELAPSE]: AWAITING INTERVAL TIMEOUT . . . {self.interval} seconds ")
                         await asyncio.sleep(self.interval) 
                     print(f"[TIMELAPSE]: {self.tlapseProgVal}% FINISHED - FRAMES {i+1}/{self.numRequestedFrames} DONE")
-
+            await asyncio.sleep(2)
+            self.cancelTasks()
+            self.device.stop()
+            self.timelapseDone = True
+            self.numFramesDone = 0 # reset counter for new timelapse if initiated through the GUI
+            self.timelapseFinished.emit()
         except asyncio.exceptions.CancelledError:
             print("CANCELLED TIMELAPSE")        
 
-            
-  
+    
 
     @asyncSlot()
     async def cancelTasks(self):
@@ -230,18 +237,22 @@ class TheaTimelapse(Experiment):
         """
             Cancel async tasks. (software stop)
         """
-        print("cancelling tasks")
+
+        print("cancelling previously scheduled tasks")
         try:
             if self.device.avgTask is not None:
-                self.device.avgTask.cancel()
+                self.continueTimelapse = False
                 self.timelapseTask.cancel()
-                print("Averaging cancelled")
+                self.device.avgTask.cancel()
+                self.continueTimelapse = False
+                self.timelapseDone = True
+                self.timelapseFinished.emit()
                 self.avgProgVal = 0
                 self.tlapseProgVal = 0
                 self.numFramesDone = 0
                 self.continueTimelapse = False
         
-        except CancelledError:
+        except asyncio.exceptions.CancelledError:
             print("Shutting down tasks")
 
 
