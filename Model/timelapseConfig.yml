@@ -14,4 +14,5 @@ Timelapse:
   frames: 3 # zero to run out max storage, enter int for other specified values.
   maxStorage: 2GB # max storage for timelapse session - kB, MB, GB
   _filesize : 606 kB # typical filesize - private!
+  numDisplayDataSeries: 5
 
