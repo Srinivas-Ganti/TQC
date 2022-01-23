@@ -24,15 +24,13 @@ class TimelapseMainWindow(QMainWindow):
 
     dataUpdateReady = pyqtSignal(object)
 
+
     def __init__(self, experiment = None):
 
         super().__init__()
         self.experiment = experiment
         self.initUI()
         
-
-    
-
     
     def connectEvents(self):
         
@@ -45,7 +43,7 @@ class TimelapseMainWindow(QMainWindow):
         self.experiment.device.pulseReady.connect(self.processPulses)
         self.experiment.device.pulseReady.connect(self.experiment.processPulses)
         self.experiment.device.dataUpdateReady.connect(self.experiment.device.done)
-      
+        self.experiment.timelapseFinished.connect(self.enableAnimation)
         self.btnStart.clicked.connect(self.experiment.timelapseStart)
         self.btnStart.clicked.connect(self.disableLEdit)
         self.btnStop.clicked.connect(self.experiment.device.stop) 
@@ -53,13 +51,50 @@ class TimelapseMainWindow(QMainWindow):
         self.btnStop.clicked.connect(self.experiment.cancelTasks)
      
         self.lEditTdsStart.editingFinished.connect(self.validateEditStart)
-        self.lEditTdsEnd.setReadOnly(True)
+        
         self.lEditTdsAvgs.editingFinished.connect(self.validateEditAverages)
 
         self.lEditFrames.editingFinished.connect(self.validateEditFrames)
         self.lEditInterval.editingFinished.connect(self.validateInterval)
         self.lEditTdsAvgs.textChanged.connect(self.avgsChanged)
-    
+        self.livePlot.scene().sigMouseMoved.connect(self.mouseMoved)
+            
+
+    def mouseMoved(self, evt):
+
+        """
+            Track mouse movement on data plot in plot units (arb.dB vs THz)
+
+            :type evt: pyqtSignal 
+            :param evt: Emitted when the mouse cursor moves over the scene. Contains scene cooridinates of the mouse cursor.
+
+        """
+
+        pos = evt
+        if self.livePlot.sceneBoundingRect().contains(pos):
+            mousePoint = self.livePlot.plotItem.vb.mapSceneToView(pos)
+            x = float("{0:.3f}".format(mousePoint.x()))
+            y = float("{0:.3f}".format(mousePoint.y()))
+            self.xyLabel.setText(f"last cursor position: {x, y}")
+
+
+    def plot(self, x, y):
+
+        """
+            Plot data on existing plot widget.
+
+            :type x: numpy array
+            :param x: frequency axis data
+            :type y: numpy array
+            :param y: Pulse FFT data.
+
+            :return: plot data.
+            :rtype: PlotWidget.plot  
+
+        """   
+
+        return self.livePlot.plot(x,y)
+
 
 
     def disableLEdit(self):
@@ -70,21 +105,23 @@ class TimelapseMainWindow(QMainWindow):
         self.lEditTdsAvgs.setReadOnly(True)
         self.lEditFrames.setReadOnly(True)
         self.lEditInterval.setReadOnly(True)
+    
 
 
     def enableLEdit(self):
 
-        """"Disable line edit fields during acquisition"""
+        """"Enable line edit fields when ScanControl has stopped"""
 
         self.lEditTdsStart.setReadOnly(False)
         self.lEditTdsAvgs.setReadOnly(False)
         self.lEditFrames.setReadOnly(False)
         self.lEditInterval.setReadOnly(False)
-
-
+      
 
 
     def avgsChanged(self):
+
+        """"Terminal Message"""
 
         print(f"Experiment averages changed to : {self.experiment.numAvgs}")
         
@@ -218,24 +255,38 @@ class TimelapseMainWindow(QMainWindow):
             print("[ERROR] InvalidInput: Setting default config value")
             self.experiment.avgsOK = False
             self.lEditTdsAvgs.setText(str(self.experiment.config['TScan']['numAvgs']))
-        
 
 
     def initAttribs(self):
 
         """
-            Initialise class attributes for QC application with default values.
+            Initialise class attributes for Timelapse application with default values.
         """
 
-        self.height = 450
-        self.width = 450
+        self.height = 950
+        self.width = 570
         self.left = 10
         self.top = 40      
         self.setGeometry(self.left, self.top, self.width, self.height)   
+        self.livePlot.setXRange(0, 5.3, padding = 0)
+        self.livePlot.setYRange(-280, -100, padding = 0)
+        self.colorLivePulse = (66,155,184, 145)
+        self.colorlivePulseBackground = (66,155,184,145)
 
+        self.livePlotLineWidth = 1
+        self.averagePlotLineWidth = 1.5
 
+        self.lEditTdsStart.setAlignment(Qt.AlignCenter) 
+        self.lEditTdsEnd.setAlignment(Qt.AlignCenter) 
+        self.lEditTdsAvgs.setAlignment(Qt.AlignCenter) 
+        self.plotDataContainer = {'livePulseFft': None}       # Dictionary for plot items
+        self.lEditTdsEnd.setReadOnly(True)
 
     def initUI(self):
+
+        """
+            Initialise UI from design file
+        """
 
         uic.loadUi("../View/Designer/periodicMeasurementUI.ui", self)
         self.setWindowTitle("THEA Timelapse")
@@ -245,7 +296,14 @@ class TimelapseMainWindow(QMainWindow):
         self.validateDefaultInputs()
         self.progAvg.setValue(self.experiment.avgProgVal)
         self.progTlapse.setValue(self.experiment.tlapseProgVal)
-
+        
+        self.livePlot.setLabel('left', 'Transmission Intensity (dB)')
+        self.livePlot.setLabel('bottom', 'Frequency (THz)')
+        self.livePlot.setTitle("""Timelapse FFT""", color = 'g', size = "45 pt")   
+        self.livePlot.showGrid(x = True, y = True)
+        self.checkBoxCreateGIF.setCheckable(True)
+        self.checkBox_keepSrcImgs.setCheckable(True)
+       
        
 
     def disableButtons(self):
@@ -255,45 +313,66 @@ class TimelapseMainWindow(QMainWindow):
         """
 
         self.btnStart.setEnabled(False)
-    
+        self.btnAnimateResult.setEnabled(False)
 
     def enableButtons(self):
 
         """
             Enable GUI buttons for user interaction
         """
-
         
         self.btnStart.setEnabled(True)
         self.btnStop.setEnabled(True)
         
-        
 
-
-
-
-##################################### AsyncSlot coroutines #######################################
-
-    @asyncSlot()
-    async def stop(self):
+    
+    def stop(self):
 
         """Reset icons to offline state"""
-
-        await asyncio.sleep(0.1)
         
         self.enableButtons()
         self.progTlapse.setValue(self.experiment.tlapseProgVal)
         self.progAvg.setValue(self.experiment.avgProgVal)
         self.enableLEdit()
-        
+        self.lblFrameCount.setText("Frame Count: ")
+   
 
-    @asyncSlot()
-    async def resetAveraging(self):
+
+   
+    def resetAveraging(self):
 
         """"Reset averaging progress bar"""
 
-        await asyncio.sleep(0.01)
         self.progAvg.setValue(0)
+
+
+    
+
+##################################### AsyncSlot coroutines #######################################
+    
+    @asyncSlot()
+    async def _statusChanged(self, status):
+
+        """
+            AsyncSlot Coroutine to indicate ScanControl Staus.
+
+        """        
+        
+        
+        self.lblStatus.setText("Status: " + self.experiment.device.status) 
+        
+
+    @asyncSlot()
+    async def enableAnimation(self):
+
+        """Enable animation button when timelapse finished"""
+        
+        if self.checkBoxCreateGIF.isChecked() and self.experiment.timelapseDone and not self.experiment.continueTimelapse:
+            self.btnAnimateResult.setEnabled(True)
+            
+        elif not self.checkBoxCreateGIF.isChecked():
+            self.btnAnimateResult.setEnabled(False)
+          
 
 
     @asyncSlot()
@@ -308,20 +387,17 @@ class TimelapseMainWindow(QMainWindow):
             self.progAvg.setValue(self.experiment.avgProgVal)
             self.progTlapse.setValue(self.experiment.tlapseProgVal)
             self.lblFrameCount.setText(f"Frame count: {self.experiment.numFramesDone}/{self.experiment.numRequestedFrames}")
+                       
+            if self.plotDataContainer['livePulseFft'] is None :
+                self.plotDataContainer['livePulseFft'] = self.plot(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
+               
+            self.plotDataContainer['livePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
+            self.plotDataContainer['livePulseFft'].curve.setPen(color = self.colorLivePulse, width = self.averagePlotLineWidth)
 
-
-    @asyncSlot()
-    async def _statusChanged(self, status):
-
-        """
-            AsyncSlot Coroutine to indicate ScanControl Staus.
-        """        
-
-        self.lblStatus.setText("Status: " + self.experiment.device.status) 
-    
 
 
 #******************************************************************************************
+
 if __name__ == '__main__':
     
     
