@@ -7,7 +7,7 @@ from PyQt5 import uic
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
-from pyqtgraph import PlotWidget, graphicsItems
+from pyqtgraph import PlotWidget, graphicsItems, TextItem
 from pyqtgraph.graphicsItems.PlotDataItem import PlotDataItem, PlotCurveItem
 from scipy import signal
 
