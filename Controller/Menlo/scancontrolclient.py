@@ -10,8 +10,8 @@ base_dir =  os.path.dirname(
 
 sys.path.append(base_dir)
 
-from Menlo.pywebchannel.asyncronous import QWebChannel
-from Menlo.pywebchannel.qwebchannel import QObject, Signal
+from Controller.Menlo.pywebchannel.asyncronous import QWebChannel
+from Controller.Menlo.pywebchannel.qwebchannel import QObject, Signal
 import websockets
 
 import enum
