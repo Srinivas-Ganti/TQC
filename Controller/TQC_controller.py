@@ -15,7 +15,7 @@ from qasync import QEventLoop, asyncSlot
 from PyQt5.QtCore import pyqtSignal, QTextCodec
 from PyQt5.QtWidgets import QApplication, QWidget
 
-from Menlo.scancontrolclient import ScanControlClient, ScanControlStatus
+from Controller.Menlo.scancontrolclient import ScanControlClient, ScanControlStatus
 
 
 class Device(QWidget):
