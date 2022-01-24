@@ -20,6 +20,7 @@ from Model import ur
 from pint.errors import *
 from PIL import Image
 
+
 class AnotherWindow(QWidget):
 
     """
@@ -371,7 +372,7 @@ class TimelapseMainWindow(QMainWindow):
             Initialise UI from design file
         """
 
-        uic.loadUi("../View/Designer/periodicMeasurementUI.ui", self)
+        uic.loadUi("View/Designer/periodicMeasurementUI.ui", self)
         self.setWindowTitle("THEA Timelapse")
         self.disableButtons()
         self.initAttribs()
