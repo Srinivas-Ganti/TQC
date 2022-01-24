@@ -1,7 +1,6 @@
 import sys
 import os
 
-from numpy.lib.arraysetops import isin
 
 baseDir =  os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 modelDir = os.path.join(baseDir, "Model")
@@ -19,11 +18,35 @@ from Model.theaTimelapse import *
 from Model import ur
 
 from pint.errors import *
+from PIL import Image
+
+class AnotherWindow(QWidget):
+
+    """
+    This "window" is a QWidget. If it has no parent, it
+    will appear as a free-floating window as we want - to display the animation.
+    """
+
+    def __init__(self):
+
+        super().__init__()
+        layout = QVBoxLayout()
+        self.setWindowTitle("GIF RESULT")
+        self.height = 400
+        self.width = 570
+        self.left =10 
+        self.top = 40
+        self.label = QLabel()
+        self.setGeometry(self.left, self.top, self.width, self.height)  
+        layout.addWidget(self.label)
+        self.setLayout(layout)
+
 
 class TimelapseMainWindow(QMainWindow):
 
-    dataUpdateReady = pyqtSignal(object)
-
+    """
+    THEA Timelapse GUI Main window class
+    """
 
     def __init__(self, experiment = None):
 
@@ -39,17 +62,18 @@ class TimelapseMainWindow(QMainWindow):
         """
       
         self.experiment.device.scanControl.statusChanged.connect(self._statusChanged)
-        
+        self.experiment.nextScan.connect(self.updateGraphics)
         self.experiment.device.pulseReady.connect(self.processPulses)
         self.experiment.device.pulseReady.connect(self.experiment.processPulses)
         self.experiment.device.dataUpdateReady.connect(self.experiment.device.done)
         self.experiment.timelapseFinished.connect(self.enableAnimation)
+        self.experiment.timelapseFinished.connect(self.makeGIF)
         self.btnStart.clicked.connect(self.experiment.timelapseStart)
         self.btnStart.clicked.connect(self.disableLEdit)
         self.btnStop.clicked.connect(self.experiment.device.stop) 
         self.btnStop.clicked.connect(self.stop) 
         self.btnStop.clicked.connect(self.experiment.cancelTasks)
-     
+        self.btnAnimateResult.clicked.connect(self.animateGIF)
         self.lEditTdsStart.editingFinished.connect(self.validateEditStart)
         
         self.lEditTdsAvgs.editingFinished.connect(self.validateEditAverages)
@@ -58,7 +82,69 @@ class TimelapseMainWindow(QMainWindow):
         self.lEditInterval.editingFinished.connect(self.validateInterval)
         self.lEditTdsAvgs.textChanged.connect(self.avgsChanged)
         self.livePlot.scene().sigMouseMoved.connect(self.mouseMoved)
+
+
+
+    def animateGIF(self):
+        
+        self.movie = QMovie(f"{os.path.join(self.savingFolder, self.gifName)}.gif")
+        self.gifWindow.label.setMovie(self.movie)
+        self.gifWindow.setWindowTitle(f"GIF RESULT: {self.gifName}")
+        self.movie.start()
+        self.gifWindow.show()
+
+
+    def updateGraphics(self):
+
+        """Update text labels on plot, previous data color schemes"""  
+
+        self.labelValue.setText(f"Data: {self.experiment.numFramesDone}/{self.experiment.numRequestedFrames}")
+        if self.checkBoxCreateGIF.isChecked():
             
+            self.savingFolder = os.path.join(self.experiment.exportPath, "Images")
+            if not os.path.isdir(self.savingFolder):
+                os.makedirs(self.savingFolder)
+            if len(self.experiment.results) > 0:    
+                dt =  str(self.experiment.results.iloc[-1]['datetime']).replace(' ','_').split('.')[0].replace(':','-')
+                name = f"{dt}_{self.experiment.results.iloc[-1]['frameNum']}.png"
+                if name not in self.experiment.GIFSourceNames:
+                    self.experiment.GIFSourceNames.append(name)
+                    self.exporter.export(os.path.join(self.savingFolder, name))
+
+
+    def makeGIF(self):
+
+        """Make GIF using result data"""
+
+        if self.checkBoxCreateGIF.isChecked() and len(self.experiment.GIFSourceNames) > 0 and not self.experiment.continueTimelapse:
+            self.experiment.timelapseDone = False
+            dfListGIF = [os.path.join(self.savingFolder, image) for image in self.experiment.GIFSourceNames]
+            for imgPath in dfListGIF:
+                if not os.path.isfile(imgPath):
+                    print("Images not found, revising GIF source list")
+                    self.experiment.GIFSourceNames.remove(imgPath.split(f"{self.savingFolder}")[1])
+                    print(f"{imgPath.split(self.savingFolder)[1]}")
+                    print("************************************")
+                    print(f"{imgPath.split(self.savingFolder)[0]}")
+
+
+            self.gifList = [Image.open(os.path.join(self.savingFolder, image)) for image in self.experiment.GIFSourceNames] 
+
+            frame_one = self.gifList[0]
+            self.gifName = f"{self.experiment.GIFSourceNames[0].split('.')[0].split('.png')[0]}_{self.experiment.GIFSourceNames[-1].split('.')[0].split('.png')[0]}"
+            frame_one.save(f"{os.path.join(self.savingFolder, self.gifName)}.gif", format="GIF", append_images=self.gifList,
+                save_all=True, duration=100, loop=0)
+            if not self.checkBox_keepSrcImgs.isChecked(): 
+                    print("DELETING SOURCE IMAGES")
+                    self.filesToRemove = [os.path.join(self.savingFolder, img) for img in self.experiment.GIFSourceNames]
+                    for f in self.filesToRemove:
+                        print(f"Removing {f}")
+                        try:
+                            os.remove(f)
+                        except ValueError:
+                            print("file already removed")
+            self.btnAnimateResult.setEnabled(True)
+                
 
     def mouseMoved(self, evt):
 
@@ -105,7 +191,7 @@ class TimelapseMainWindow(QMainWindow):
         self.lEditTdsAvgs.setReadOnly(True)
         self.lEditFrames.setReadOnly(True)
         self.lEditInterval.setReadOnly(True)
-    
+        self.btnAnimateResult.setEnabled(False)
 
 
     def enableLEdit(self):
@@ -267,20 +353,17 @@ class TimelapseMainWindow(QMainWindow):
         self.width = 570
         self.left = 10
         self.top = 40      
+        self.labelValue = None         #LabelItem to display timelapse frames on plot
         self.setGeometry(self.left, self.top, self.width, self.height)   
         self.livePlot.setXRange(0, 5.3, padding = 0)
         self.livePlot.setYRange(-280, -100, padding = 0)
         self.colorLivePulse = (66,155,184, 145)
         self.colorlivePulseBackground = (66,155,184,145)
-
         self.livePlotLineWidth = 1
         self.averagePlotLineWidth = 1.5
-
-        self.lEditTdsStart.setAlignment(Qt.AlignCenter) 
-        self.lEditTdsEnd.setAlignment(Qt.AlignCenter) 
-        self.lEditTdsAvgs.setAlignment(Qt.AlignCenter) 
         self.plotDataContainer = {'livePulseFft': None}       # Dictionary for plot items
         self.lEditTdsEnd.setReadOnly(True)
+        
 
     def initUI(self):
 
@@ -301,10 +384,23 @@ class TimelapseMainWindow(QMainWindow):
         self.livePlot.setLabel('bottom', 'Frequency (THz)')
         self.livePlot.setTitle("""Timelapse FFT""", color = 'g', size = "45 pt")   
         self.livePlot.showGrid(x = True, y = True)
+        self.labelValue = TextItem('', **{'color': '#FFF'})
+        self.labelValue.setPos(QPointF(4,-100))
+
+        self.lEditTdsStart.setAlignment(Qt.AlignCenter) 
+        self.lEditTdsEnd.setAlignment(Qt.AlignCenter) 
+        self.lEditTdsAvgs.setAlignment(Qt.AlignCenter) 
+        self.livePlot.addItem(self.labelValue)
+
         self.checkBoxCreateGIF.setCheckable(True)
         self.checkBox_keepSrcImgs.setCheckable(True)
        
-       
+        self.exporter = ImageExporter(self.livePlot.scene())   # Exporter for creating plot images
+        self.exporter.parameters()['width'] = 500
+        self.gifList = None
+        self.gifWindow = AnotherWindow()
+        self.gifName = ""
+
 
     def disableButtons(self):
 
@@ -314,6 +410,7 @@ class TimelapseMainWindow(QMainWindow):
 
         self.btnStart.setEnabled(False)
         self.btnAnimateResult.setEnabled(False)
+
 
     def enableButtons(self):
 
@@ -325,7 +422,6 @@ class TimelapseMainWindow(QMainWindow):
         self.btnStop.setEnabled(True)
         
 
-    
     def stop(self):
 
         """Reset icons to offline state"""
@@ -335,9 +431,8 @@ class TimelapseMainWindow(QMainWindow):
         self.progAvg.setValue(self.experiment.avgProgVal)
         self.enableLEdit()
         self.lblFrameCount.setText("Frame Count: ")
+        self.progAvg.setValue(0)
    
-
-
    
     def resetAveraging(self):
 
@@ -381,6 +476,9 @@ class TimelapseMainWindow(QMainWindow):
         """"GUI button state management during data processing"""
 
         await asyncio.sleep(0.01)
+        lblSceneX = self.livePlot.getViewBox().state['targetRange'][0][0] + np.abs(self.livePlot.getViewBox().state['targetRange'][0][1] - self.livePlot.getViewBox().state['targetRange'][0][0])*0.80
+        lblSceneY =  self.livePlot.getViewBox().state['targetRange'][1][0] + np.abs(self.livePlot.getViewBox().state['targetRange'][1][1] - self.livePlot.getViewBox().state['targetRange'][1][0])*0.95
+        self.labelValue.setPos(QPointF(lblSceneX,lblSceneY))
 
         if self.experiment.device.isAcquiring:
             self.lEditTdsAvgs.setText(str(self.experiment.numAvgs))
