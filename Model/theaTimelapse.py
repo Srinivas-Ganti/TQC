@@ -1,12 +1,10 @@
 import sys
 import os
 
-from pint.errors import UndefinedUnitError
-from pyqtgraph.graphicsItems.PlotDataItem import dataType
 
+from pyqtgraph.exporters import ImageExporter
 baseDir =  os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 rscDir = os.path.join(baseDir, "Resources")
-# configDir  = os.path.join(baseDir, "Config") # use only if making a separate config dir
 configDir = os.path.join(baseDir, "Model")  # if keeping in same dir as model
 sys.path.append(baseDir)
 
@@ -14,13 +12,16 @@ sys.path.append(baseDir)
 from Model.experiment import *
 from Resources import ur
 from MenloLoader import MenloLoader
+import pandas as pd
 
-from scipy.signal import find_peaks
+# from scipy.signal import find_peaks
 
 
 class TheaTimelapse(Experiment):
 
     timelapseFinished = pyqtSignal()
+    nextScan = pyqtSignal() 
+    
 
     def __init__(self, loop = None, configFile = None):
         
@@ -58,7 +59,8 @@ class TheaTimelapse(Experiment):
         self.avgsOk = False                                   # Flag for required pulse averages validation
         self.framesOk = False                                 # Flag for timelapse frame num validation
         self.intervalOk = False                               # Flag for timelapse interval validation
-        
+        self.srcTDS = []                                      # list to store tds dictionaries
+        self.dtlist = []                                      # list to store datetime information  
  
     def initAttribs(self):
 
@@ -92,6 +94,8 @@ class TheaTimelapse(Experiment):
         self.timelapseTask = None
         self.continueTimelapse = None              # flag to control/ suspend aqcuisition
         self.timelapseDone = False                 # flag to control progress
+        self.results = pd.DataFrame()                      # this will be the resulting dataFrame
+        self.GIFSourceNames = []                   # names of files to make a GIF out of
 
 
     def checkSessionStorage(self):
@@ -146,7 +150,7 @@ class TheaTimelapse(Experiment):
         self.freq, self.FFT = self.calculateFFT(self.timeAxis,self.pulseAmp)
         self.avgProgVal = int(self.device.scanControl.currentAverages/\
                                  self.device.scanControl.desiredAverages*100)
-        #self.tlapseProgVal = self.numRequestedFrames/self.maxFrames*100  # check later
+        
         await asyncio.sleep(0.1)
         
  
@@ -175,15 +179,23 @@ class TheaTimelapse(Experiment):
             print("DONE")
             rawExportData = np.vstack([self.timeAxis, self.pulseAmp]).T
             currentDatetime = datetime.now()
+
             header = f"""THEA TIMELAPSE - RAM Group GmbH, powered by Menlo Systems\nProgram Version 0.2\nAverage over {self.numAvgs} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}
     User time axis shift: {self.config['TScan']['begin']*-1}
     Time [ps]              THz Signal [mV]"""
             base_name = f"""{currentDatetime.strftime("%d%m%yT%H%M%S")}_data{self.numFramesDone+1:04d}"""
             exportPath = os.path.join(self.exportPath, base_name)
             data_file = os.path.join(exportPath.replace("/","\\") +'.txt')
-            print(data_file)
+            print(f"EXPORTED: {data_file}")
+            df = pd.DataFrame.from_dict({'frameNum': f"data{self.numFramesDone+1:04d}" , 'datetime': currentDatetime, 'time':self.timeAxis, 'amp':self.pulseAmp, 'freq' : self.freq, 'FFT': self.FFT}, orient='index')
+            df = df.transpose()
+            self.results = pd.concat([self.results, df], axis = 0).reset_index(drop = True)
+            
             np.savetxt(data_file, rawExportData, header = header, delimiter = '\t' )  
             self.numFramesDone +=1
+            
+            print(self.results.tail())
+
             
 
     @asyncSlot()
@@ -199,27 +211,31 @@ class TheaTimelapse(Experiment):
     async def timelapseStart(self):
 
         try:
+            self.results = pd.DataFrame()
             self.timelapseDone = False
             self.continueTimelapse = True
-            self.timelapseFinished.emit()
+            self.GIFSourceNames = [] 
+            self.timelapseFinished.emit()   # emit this to check validity of the btn states
+
             if self.numRequestedFrames == 0:     
                 self.numRequestedFrames = self.maxFrames
             for i in range(self.numRequestedFrames):
                 if self.continueTimelapse:       
                     print(f"[TIMELAPSE]: FRAME {i+1}/{self.numRequestedFrames}")
-                
                     self.timelapseTask =  asyncio.ensure_future(self.newScan())
-                    
                     asyncio.gather(self.timelapseTask)
+                    self.nextScan.emit()
                     while not self.timelapseTask.done():
                         await asyncio.sleep(1)
                     self.tlapseProgVal = int((i+1)/self.numRequestedFrames*100)
                     print(f"[TIMELAPSE]: {self.tlapseProgVal}% - FRAME {i+1}/{self.numRequestedFrames}")
 
+                    
                     if i+1 < self.numRequestedFrames:
                         print(f"[TIMELAPSE]: AWAITING INTERVAL TIMEOUT . . . {self.interval} seconds ")
                         await asyncio.sleep(self.interval) 
                     print(f"[TIMELAPSE]: {self.tlapseProgVal}% FINISHED - FRAMES {i+1}/{self.numRequestedFrames} DONE")
+                    self.nextScan.emit()
             await asyncio.sleep(2)
             self.cancelTasks()
             self.device.stop()
