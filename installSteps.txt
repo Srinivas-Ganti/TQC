@@ -1,0 +1,2 @@
+pyi-makespec --paths=C:\Users\TeraSmart\Documents\THEA_Python\TQC\Controller --paths=C:\Users\TeraSmart\Documents\THEA_Python\TQC\Controller\Menlo  --paths=C:\Users\TeraSmart\Documents\THEA_Python\TQC\Model --paths=C:\Users\TeraSmart\Documents\THEA_Python\TQC\View --paths=C:\Users\TeraSmart\Documents\THEA_Python\TQC\View\Designer timelapseGUI.py --paths=C:\Users\TeraSmart\Documents\THEA_Python\TQC\Resources
+PyInstaller -D --noconfirm timelapseGUI.spec # when bundling app using spec file, the inline options are ignored. Only datas from the spec file are accepted
