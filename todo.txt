@@ -1,16 +1,17 @@
-# 0. Draw state machine.
-1. re-run classification script - find new Air/ Sensor parameters - change sensor tomorrow
-2. examine 10 avgs/ None bug. Check Classification trigger
+# 0. Define QC rig state machine.
+1. re-run classification script - find new Air/ Sensor parameters - change clean sensor cartridge 
+2. review code - test new state machine concept on linear actuator (2 states - insert, eject - no crash detection)
 3. Add delay for cartridge travel w/ lin actuator
-4. refactor StdRef in qc routine. Button state control. Dont use "live sensing". Instead use full robot control.
+4. Refactor StdRef in QC routine. Button state control. Dont use "live sensing". Instead use full robot control.
 5. Use triggered Sensor check using 'Ack' from robot instead
 6. Modify robot code to send 'Ack' on task completion. 
-7. Implement keepout zone for operator mode whilst jogging motors
-8. refactor qc routine for mechanical unit test e.g. 200 QC operations.
+7. Implement logger to record session details.
+8. Implement keepout zone for moves in operator mode e.g. whilst jogging motors
+9. Refactor QC routine for mechanical unit test e.g. 200 QC operations.
 
 
-0. STATE MACHINE:
--------------------
+0. QC RIG STATE MACHINE:
+------------------------
           
           ALIGN 1 and ALIGN 2 correspond to the two table positions needed to operate the QC loop.
 
@@ -34,7 +35,7 @@ State 2 - QC loop active
 
 State 3 - Errors 
 
-3.1 - no ACK
+3.1 - no ACK 
 3.2 - ALIGN 1/2 (cartridges extended) - Air instead of sensor -> retry - timeout
 3.3 - crash (implement with sw interrupt?)
 
