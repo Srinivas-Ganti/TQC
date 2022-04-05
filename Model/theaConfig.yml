@@ -1,10 +1,10 @@
 Classification:
   distance: 80
   prominence: 0.25
-  tdsInspectEnd: 100
-  tdsInspectStart: 50
+  tdsInspectEnd: 45
+  tdsInspectStart: 10
   threshold: 0.005
-  width: 500
+  width: 19
 Export:
   filename: data.dat
   saveDir: C:\Users\TeraSmart\Documents\QC\01062022\Batch4
@@ -16,10 +16,11 @@ QC:
   lowerFreqBound: 0.5
   maxViolations: 7
   qcAverages: 10
-  qcSaveDir: C:\Users\TeraSmart\Documents\QC\01062022\Batch4
+  
+  qcSaveDir: C:\Users\TeraSmart-PC\Documents\QC\01062022\Batch4
   sensorId: 1
-  stdRefFileName: C:\Users\TeraSmart\Documents\THEA_Python\TQC\Resources\StandardReferences\030122T143008_WID_W0_SN_1_STANDARD_Reference.txt
-  stdRefFilePath: C:\Users\TeraSmart\Documents\THEA_Python\TQC\Resources\StandardReferences\071221T151127_WID_W0_SN_1_STANDARD_Reference.txt
+  stdRefFileName: 2021-10-26T105509_T_NIL_RH_NIL_PID_421_SN_22311323_Reference.txt
+  
   upperFreqBound: 0.9
   waferId: W0000
 Robots:
@@ -34,6 +35,6 @@ TScan:
   window: 400
 Temp:
   airFileNames:
-  - Air_singleshot.txt
+  - Air.txt
   sensorFileNames:
-  - F1_singleshot.txt
+  - Sensor1.txt
