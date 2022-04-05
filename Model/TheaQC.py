@@ -176,7 +176,7 @@ class TheaQC(Experiment):
         """
 
 
-        refPath = os.path.join(rscDir,"StandardReferences", self.config['QC']['stdRefFilePath'])
+        refPath = os.path.join(rscDir,"StandardReferences", self.config['QC']['stdRefFileName'])
         print(refPath)
         try:
             stdRefData = MenloLoader([refPath]).data
@@ -184,7 +184,7 @@ class TheaQC(Experiment):
             print("Standard reference loaded")
             print(self.stdRef)
         except:
-            print(f"[ERROR]: FileNotFound. No resource file called {self.config['QC']['stdRefFilePath']}")
+            print(f"[ERROR]: FileNotFound. No resource file called {self.config['QC']['stdRefFileName']}")
 
 
     def classifyTDS(self):
@@ -202,25 +202,34 @@ class TheaQC(Experiment):
         
         self.pulsePeaks['prominence'] = find_peaks(self.pulseAmp[start:end], prominence = self.classificationProminence)
         self.pulsePeaks['threshold'] = find_peaks(self.pulseAmp[start:end], threshold = self.classificationThreshold)
-        if self.find_nearest(self.pulsePeaks['distance'][0], 510)[1]  > 510: # checking array indices not values
+        
+        if self.find_nearest(self.pulsePeaks['distance'][0], 250)[1]  > 260: # checking array indices not values
             isSensor += 1 
+            print("CLASSIFICATION DISTANCE : SENSOR")
         else:
             isAir += 1   
- 
-        if len(self.pulsePeaks['threshold'][0]) > 5:
+            print("CLASSIFICATION DISTANCE : AIR")
+        
+        if len(self.pulsePeaks['threshold'][0]) > 3:
             isAir += 1     
+            print("CLASSIFICATION THRESHOLD : AIR")
         else:
             isSensor += 1
-        if len(self.pulsePeaks['prominence'][0]) > 3:
+            print("CLASSIFICATION THRESHOLD : SENSOR")
+        if len(self.pulsePeaks['prominence'][0]) > 4:
             isAir += 1    
+            print("CLASSIFICATION PROMINENCE : AIR")
         else:
             isSensor +=1  
+            print("CLASSIFICATION PROMINENCE : SENSOR")
         sensorUpdate = {'isSensor': isSensor, 'isAir': isAir}
 
         if sensorUpdate['isAir'] < sensorUpdate['isSensor']:
             self.classification = "Sensor"
+            print("CLASSIFICATION RESULT <<<<<<<<<< SENSOR")
         if sensorUpdate['isAir'] > sensorUpdate['isSensor']:
             self.classification = "Air"
+            print("CLASSIFICATION RESULT <<<<<<<<<< AIR")
         self.sensorUpdateReady.emit()  
 
 
