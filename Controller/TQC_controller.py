@@ -1,5 +1,6 @@
 import sys
 import os
+import logging
 
 baseDirC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 controllerDir = os.path.join(baseDirC, "Controller")
@@ -207,7 +208,7 @@ class Device(QWidget):
                 self.setDesiredAverages(1)
 
                 print("Default/ non task avgs set to single shot")
-            else:
+            elif not self.isAveragingDone() or self.avgTask is None:
 
                 print(f"No averaging task given. Averages set to : {self.scanControl.desiredAverages}")
 
