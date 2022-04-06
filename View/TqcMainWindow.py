@@ -25,6 +25,7 @@ class TqcMainWindow(QWidget):
     def __init__(self, experiment = None):
 
         super().__init__()
+        self.log = logging.getLogger(self.__class__.__name__)
         self.experiment = experiment
         self.initUI()
         self.openSerial()
@@ -34,7 +35,7 @@ class TqcMainWindow(QWidget):
         
         """Open serial port for communication with QC robot"""
 
-        self.experiment.serial.readyRead.connect(self.receive)
+        
         self.experiment.serial.open(QIODevice.ReadWrite)
 
     
@@ -45,7 +46,7 @@ class TqcMainWindow(QWidget):
         """
       
         self.experiment.device.scanControl.statusChanged.connect(self._statusChanged)
-        
+        self.experiment.serial.readyRead.connect(self.receive)
         self.experiment.device.pulseReady.connect(self.processPulses)
         self.experiment.device.pulseReady.connect(self.experiment.processPulses)
         self.experiment.device.dataUpdateReady.connect(self.experiment.device.done)
@@ -56,7 +57,7 @@ class TqcMainWindow(QWidget):
         
         
         self.btnStartAveraging.clicked.connect(self.experiment.startAveraging)
-        self.btnStart.clicked.connect(self.experiment.device.start)
+        #self.btnStart.clicked.connect(self.experiment.device.start)
         self.btnStop.clicked.connect(self.experiment.device.stop) 
         self.btnStop.clicked.connect(self.stop) 
         self.btnStop.clicked.connect(self.experiment.cancelTasks)
@@ -182,13 +183,20 @@ class TqcMainWindow(QWidget):
         self.loadTDSParams()
         print("> [SCANCONTROL] Setting TDS parameters: Done\n")        
     
+        self.loadQC()
         self.chipsPerWafer = int(self.experiment.config['QC']['chipsPerWafer'])
+        
         self.lEditWaferId.setText(str(self.experiment.config['QC']['waferId']))
         self.lEditWaferId.editingFinished.emit()
-        self.loadQC()
+        
         self.lEditSensorId.setText(str(self.experiment.config['QC']['sensorId']))
         self.lEditSensorId.editingFinished.emit()         
-
+        
+        if self.experiment.waferIdOk and self.experiment.sensorIdOk:
+            self.btnStartQC.setEnabled(True)        
+        else:
+            self.btnStartQC.setEnabled(False)
+    
 
     def loadTDSParams(self):
 
@@ -200,7 +208,7 @@ class TqcMainWindow(QWidget):
             print("TDS Inputs accepted")
             self.experiment.device.setBegin(self.experiment.startTime)
             self.experiment.device.setEnd(self.experiment.endTime)
-            self.btnStart.setEnabled(True)
+            # self.btnStart.setEnabled(True)
             self.btnStartAveraging.setEnabled(True)
             self.btnResetAvg.setEnabled(True)
 
@@ -210,13 +218,10 @@ class TqcMainWindow(QWidget):
         """
             Load QC parameters from config file and validate inputs
         """
-
+        
         self.experiment.loadQcConfig()
-        if self.experiment.waferIdOk and self.experiment.sensorIdOk and self.experiment.keepRunning:
-            self.btnStartQC.setEnabled(True)
-        else:
-            self.btnStartQC.setEnabled(False)
-    
+        print("QC config loaded")
+        
     
     def validateEditAverages(self):
 
@@ -361,11 +366,11 @@ class TqcMainWindow(QWidget):
             Disable GUI buttons from user interactions.
         """
 
-        self.btnStart.setEnabled(False)
+        # self.btnStart.setEnabled(False)
         self.btnResetAvg.setEnabled(False)
         self.btnStartAveraging.setEnabled(False)
         
-        self.btnStartQC.setEnabled(False)
+        # self.btnStartQC.setEnabled(False)
         self.btnFinishQC.setEnabled(False)
         self.btnNewStdRef.setEnabled(False)
 
@@ -377,7 +382,7 @@ class TqcMainWindow(QWidget):
         """
 
         
-        self.btnStart.setEnabled(True)
+        # self.btnStart.setEnabled(True)
         self.btnStop.setEnabled(True)
         self.btnStartQC.setEnabled(True)
         self.btnStartAveraging.setEnabled(True)
@@ -412,7 +417,7 @@ class TqcMainWindow(QWidget):
             if isinstance(self.experiment.numAvgs, int):
                 self.lEditTdsAvgs.setText(str(self.experiment.qcNumAvgs))
                 self.lEditTdsAvgs.editingFinished.emit()    
-        
+
             stdRefPlot = self.plot(self.experiment.freq, 20*np.log(np.abs(self.experiment.stdRef.FFT[0])))
             stdRefPlot.curve.setPen(color = self.colorstdRef, width = self.averagePlotLineWidth)
 
@@ -513,7 +518,7 @@ class TqcMainWindow(QWidget):
         await asyncio.sleep(0.1)
         
         self.enableButtons()
-        self.btnStartQC.setEnabled(False)
+        # self.btnStartQC.setEnabled(False)
 
 
     @asyncSlot()
@@ -545,7 +550,7 @@ class TqcMainWindow(QWidget):
             self.btnStartQC.setEnabled(True)
             if self.experiment.classification == "Sensor":
                 self.btnNewStdRef.setEnabled(True)
-        else:
+        elif self.experiment.qcRunNum > 0:
             self.btnStartQC.setEnabled(False)
             self.btnNewStdRef.setEnabled(False)
 
