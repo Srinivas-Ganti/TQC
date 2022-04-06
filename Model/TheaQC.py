@@ -401,6 +401,9 @@ class TheaQC(Experiment):
         self.qcRunning = True
         self.qcComplete = False
         
+        ### sensor must be inserted first . Need to read ACK to proceed
+        
+
         if self.stdRef is not None:
             print("Preparing QC resources . . . ")
             self.start_idx = self.find_nearest(self.freq, self.config['QC']['lowerFreqBound'])[0]
@@ -500,7 +503,7 @@ class TheaQC(Experiment):
             rawExportData = np.vstack([self.timeAxis, self.pulseAmp]).T
             currentDatetime = datetime.now()
             header = f"""THEA QC - RAM Group GmbH, powered by Menlo Systems\nProgram Version 1.04\nAverage over {self.numAvgs} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}
-    User time axis shift: {self.config['TScan']['begin']*-1}
+    User time axis shift: {self.config['TScan']['begin']*-1} ps
     Time [ps]              THz Signal [mV]"""
             base_name = f"""{currentDatetime.strftime("%d%m%yT%H%M%S")}_WID_{self.waferId}_SN_{self.sensorId}_Reference"""
             exportPath = os.path.join(self.qcSaveDir, base_name)
