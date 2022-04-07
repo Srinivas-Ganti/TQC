@@ -17,6 +17,23 @@ sys.path.append(baseDir)
 
 from Controller.TQC_controller import *
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+formatter = logging.Formatter("%(asctime)s:%(name)s:%(message)s")
+
+file_handler = logging.FileHandler(os.path.join(logDir, 'experiment.log'))
+stream_handler = logging.StreamHandler()
+
+file_handler.setLevel(logging.ERROR)
+file_handler.setFormatter(formatter)
+
+stream_handler.setLevel(logging.ERROR)
+stream_handler.setFormatter(formatter)
+
+
+logger.addHandler(file_handler)
+logger.addHandler(stream_handler)
 
 class Experiment(QWidget):
 
@@ -52,12 +69,12 @@ class Experiment(QWidget):
 
         self.device = Device(self.loop)
         self.initialiseModel()
-        print("DEVICE LOADED")
+        logger.info("DEVICE LOADED")
     
     
     def initialiseModel(self):
 
-        print("INITIALISING FROM BASE EXPERIMENT")
+        logger.info("INITIALISING FROM BASE EXPERIMENT")
         self.device.resetAveraging()
         self.device.setBegin(self.config['TScan']['begin'])
         self.device.setEnd(float(self.config['TScan']['begin']) + float(self.config['TScan']['window']))
@@ -103,7 +120,7 @@ class Experiment(QWidget):
             dataFile = os.path.join(savingFolder, f'{baseName}_{i:04d}.{ext}')
             np.savetxt(dataFile, tds, header = header)
         except:
-            print("Invalid file path to export averaging data")
+            logger.error("Invalid file path to export averaging data")
 
 
     def calculateFFT(self, time, amp):

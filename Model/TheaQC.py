@@ -17,6 +17,23 @@ from MenloLoader import MenloLoader
 from PyQt5 import QtSerialPort
 from scipy.signal import find_peaks
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+formatter = logging.Formatter("%(asctime)s:%(name)s:%(message)s")
+
+file_handler = logging.FileHandler(os.path.join(logDir, 'experiment.log'))
+stream_handler = logging.StreamHandler()
+
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(formatter)
+
+stream_handler.setLevel(logging.DEBUG)
+stream_handler.setFormatter(formatter)
+
+
+logger.addHandler(file_handler)
+logger.addHandler(stream_handler)
 
 class TheaQC(Experiment):
 
@@ -177,20 +194,20 @@ class TheaQC(Experiment):
 
 
         refPath = os.path.join(rscDir,"StandardReferences", self.config['QC']['stdRefFileName'])
-        print(refPath)
+        
         try:
             stdRefData = MenloLoader([refPath]).data
             self.stdRef = stdRefData
-            print("Standard reference loaded")
-            print(self.stdRef)
+            logger.info("Standard reference loaded")
+            logger.info(self.stdRef)
         except:
-            print(f"[ERROR]: FileNotFound. No resource file called {self.config['QC']['stdRefFileName']}")
+            logger.error(f"[ERROR]: FileNotFound. No resource file called {self.config['QC']['stdRefFileName']}")
 
 
     def classifyTDS(self):
 
         """
-            Classify the latest pulse data as "Air" or "Sensor".
+            Classify the latest pulse data as "logger.infoor "Sensor".
         """
 
         self.pulsePeaks = {}
@@ -205,31 +222,31 @@ class TheaQC(Experiment):
         
         if self.find_nearest(self.pulsePeaks['distance'][0], 250)[1]  > 260: # checking array indices not values
             isSensor += 1 
-            print("CLASSIFICATION DISTANCE : SENSOR")
+            #logger.debug("CLASSIFICATION DISTANCE : SENSOR")
         else:
             isAir += 1   
-            print("CLASSIFICATION DISTANCE : AIR")
+            #logger.debug("CLASSIFICATION DISTANCE : AIR")
         
         if len(self.pulsePeaks['threshold'][0]) > 3:
             isAir += 1     
-            print("CLASSIFICATION THRESHOLD : AIR")
+            #logger.debug("CLASSIFICATION THRESHOLD : AIR")
         else:
             isSensor += 1
-            print("CLASSIFICATION THRESHOLD : SENSOR")
+            #logger.debug("CLASSIFICATION THRESHOLD : SENSOR")
         if len(self.pulsePeaks['prominence'][0]) > 4:
             isAir += 1    
-            print("CLASSIFICATION PROMINENCE : AIR")
+            #logger.debug("CLASSIFICATION PROMINENCE : AIR")
         else:
             isSensor +=1  
-            print("CLASSIFICATION PROMINENCE : SENSOR")
+            #logger.debug("CLASSIFICATION PROMINENCE : SENSOR")
         sensorUpdate = {'isSensor': isSensor, 'isAir': isAir}
 
         if sensorUpdate['isAir'] < sensorUpdate['isSensor']:
             self.classification = "Sensor"
-            print("CLASSIFICATION RESULT <<<<<<<<<< SENSOR")
+            logger.debug("CLASSIFICATION RESULT <<<<<<<<<< SENSOR")
         if sensorUpdate['isAir'] > sensorUpdate['isSensor']:
             self.classification = "Air"
-            print("CLASSIFICATION RESULT <<<<<<<<<< AIR")
+            logger.debug("CLASSIFICATION RESULT <<<<<<<<<< AIR")
         self.sensorUpdateReady.emit()  
 
 
@@ -463,7 +480,7 @@ class TheaQC(Experiment):
             base_name = f"""{currentDatetime.strftime("%d%m%yT%H%M%S")}_WID_{self.waferId}_SN_{self.sensorId}_STANDARD_Reference"""
             refPath = os.path.join(rscDir,"StandardReferences", base_name)
             data_file = os.path.join(refPath.replace("/","\\") +'.txt')
-            print(data_file)
+            
             np.savetxt(data_file, rawExportData, header = header, delimiter = '\t' )  
             
             newStdRef = data_file.split('/')[-1]
@@ -474,7 +491,7 @@ class TheaQC(Experiment):
             self.loadConfig()
             self.initialise()
             self.loadStandardRef()
-            print("STD REF LOADED")
+            logger.info("STD REF LOADED")
             
 
     @asyncSlot()
@@ -486,10 +503,10 @@ class TheaQC(Experiment):
         await asyncio.sleep(0.1)
         if numAvgs == None:            
             self.device.setDesiredAverages(self.numAvgs)
-            print(f"default averaginig: {self.numAvgs}")
+            logger.info(f"default averaginig: {self.numAvgs}")
         else:
             self.device.setDesiredAverages(numAvgs)
-            print(f"special averaginig: {numAvgs}")
+            logger.info(f"special averaginig: {numAvgs}")
                 
         await asyncio.sleep(1)
         self.device.keepRunning = True
@@ -520,17 +537,17 @@ class TheaQC(Experiment):
         """
             Cancel async tasks. (software stop)
         """
-        print("cancelling tasks")
+        logger.warning("cancelling tasks")
         try:
             if self.device.avgTask is not None:
                 self.device.avgTask.cancel()
-                print("Averaging cancelled")
+                logger.info("Averaging cancelled")
             if self.qcAvgTask is not None:
-                print("QC cancelled")
+                logger.info("QC cancelled")
                 self.qcAvgTask.cancel()   
                 self.qcRunning = False             
         except CancelledError:
-            print("Shutting down tasks")
+            logger.warning("Shutting down tasks")
 
 
 #*********************************************************************************************************************
