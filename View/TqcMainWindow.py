@@ -13,10 +13,29 @@ sys.path.append(viewDir)
 sys.path.append(os.path.join(viewDir, "Icons"))
 sys.path.append(uiDir)
 
+
 from Model.TheaQC import *
 from Model import ur
 
 from pint.errors import *
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+formatter = logging.Formatter("%(asctime)s:%(name)s:%(message)s")
+
+file_handler = logging.FileHandler(os.path.join(logDir, 'App.log'))
+stream_handler = logging.StreamHandler()
+
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(formatter)
+
+stream_handler.setLevel(logging.DEBUG)
+stream_handler.setFormatter(formatter)
+
+logger.addHandler(file_handler)
+logger.addHandler(stream_handler)
+
 
 class TqcMainWindow(QWidget):
 
@@ -25,7 +44,7 @@ class TqcMainWindow(QWidget):
     def __init__(self, experiment = None):
 
         super().__init__()
-        self.log = logging.getLogger(self.__class__.__name__)
+        
         self.experiment = experiment
         self.initUI()
         self.openSerial()
@@ -150,10 +169,10 @@ class TqcMainWindow(QWidget):
         """
 
         validationRule = QDoubleValidator(-420,420,3)
-        print(validationRule.validate(self.lEditTdsStart.text(),420))
+        logger.info(validationRule.validate(self.lEditTdsStart.text(),420))
         if validationRule.validate(self.lEditTdsStart.text(),
                                    420)[0] == QValidator.Acceptable:
-            print("TDS START TIME ACCEPTED")
+            logger.info("TDS START TIME ACCEPTED")
             self.experiment.startOk = True
             self.experiment.startTime = float(self.lEditTdsStart.text())
             
@@ -162,10 +181,10 @@ class TqcMainWindow(QWidget):
             self.experiment.endOk = True
             self.experiment.tdsParams['start'] = self.experiment.startTime
             self.experiment.tdsParams['end'] = self.experiment.endTime
-            print(f"End time is set to be {self.experiment.TdsWin} ps after THz pulse start at {self.experiment.startTime} ps")
-            print("TDS END TIME ACCEPTED")
+            logger.info(f"End time is set to be {self.experiment.TdsWin} ps after THz pulse start at {self.experiment.startTime} ps")
+            logger.info("TDS END TIME ACCEPTED")
         else:
-            print("[ERROR] InvalidInput: Setting default config value")
+            logger.error("[ERROR] InvalidInput: Setting default config value")
             self.experiment.startOk = False
             self.lEditTdsStart.setText(str(self.experiment.config['TScan']['begin']))
 
@@ -181,7 +200,7 @@ class TqcMainWindow(QWidget):
         self.lEditTdsAvgs.setText(str(self.experiment.config['TScan']['numAvgs']))
         self.lEditTdsAvgs.editingFinished.emit()
         self.loadTDSParams()
-        print("> [SCANCONTROL] Setting TDS parameters: Done\n")        
+        logger.info("> [SCANCONTROL] Setting TDS parameters: Done\n")        
     
         self.loadQC()
         self.chipsPerWafer = int(self.experiment.config['QC']['chipsPerWafer'])
@@ -205,7 +224,7 @@ class TqcMainWindow(QWidget):
         """
 
         if (self.experiment.startOk and self.experiment.endOk and self.experiment.avgsOk):
-            print("TDS Inputs accepted")
+            logger.info("TDS Inputs accepted")
             self.experiment.device.setBegin(self.experiment.startTime)
             self.experiment.device.setEnd(self.experiment.endTime)
             # self.btnStart.setEnabled(True)
@@ -220,7 +239,7 @@ class TqcMainWindow(QWidget):
         """
         
         self.experiment.loadQcConfig()
-        print("QC config loaded")
+        logger.info("QC config loaded")
         
     
     def validateEditAverages(self):
@@ -230,16 +249,16 @@ class TqcMainWindow(QWidget):
         """
                 
         validationRule = QIntValidator(1,2000)
-        print(validationRule.validate(self.lEditTdsAvgs.text(),2000))
+        logger.info(validationRule.validate(self.lEditTdsAvgs.text(),2000))
         if validationRule.validate(self.lEditTdsAvgs.text(),
                                    2000)[0] == QValidator.Acceptable:
-            print("TDS AVGS ACCEPTED")
+            logger.info("TDS AVGS ACCEPTED")
             self.experiment.avgsOk = True
             self.experiment.numAvgs = int(self.lEditTdsAvgs.text())
             self.experiment.tdsParams['numAvgs'] = self.experiment.numAvgs
             
         else:
-            print("[ERROR] InvalidInput: Setting default config value")
+            logger.error("[ERROR] InvalidInput: Setting default config value")
             self.experiment.avgsOK = False
             self.lEditTdsAvgs.setText(str(self.experiment.config['TScan']['numAvgs']))
         
@@ -256,11 +275,11 @@ class TqcMainWindow(QWidget):
         if wId.startswith("W"):
             try:    
                 wnum = int(wId.split("W")[1])
-                print(f"Wafer ID ACCEPTED: W{wnum}")
+                logger.info(f"Wafer ID ACCEPTED: W{wnum}")
                 self.experiment.waferId = f"W{wnum}"
             except ValueError:
-                print("Wafer ID must follow the pattern 'W<integer>'")
-                print("Setting default config value")
+                logger.warning("Wafer ID must follow the pattern 'W<integer>'")
+                logger.warning("Setting default config value")
                 self.lEditWaferId.setText(self.experiment.config['QC']['waferId'])
                 self.experiment.waferId = self.experiment.config['QC']['waferId']
         else:
@@ -282,16 +301,16 @@ class TqcMainWindow(QWidget):
         
         self.experiment.sensorIdOk = False
         validationRule = QIntValidator(1,self.experiment.chipsPerWafer)                         
-        print(validationRule.validate(self.lEditSensorId.text(),self.experiment.chipsPerWafer))
+        logger.info(validationRule.validate(self.lEditSensorId.text(),self.experiment.chipsPerWafer))
         if validationRule.validate(self.lEditSensorId.text(),
                                   self.chipsPerWafer)[0] == QValidator.Acceptable:
-            print("Sensor ID ACCEPTED")
+            logger.info("Sensor ID ACCEPTED")
             self.experiment.sensorId =  int(self.lEditSensorId.text())
         else:
-            print(f"Sensor ID must be non zero integer in range of (1 , {self.experiment.chipsPerWafer})")
+            logger.warning(f"Sensor ID must be non zero integer in range of (1 , {self.experiment.chipsPerWafer})")
             
             self.experiment.sensorId = int(self.experiment.config['QC']['sensorId'])
-            print(f"Setting default config value: Sensor ID is set to {self.experiment.sensorId}")
+            logger.warning(f"Setting default config value: Sensor ID is set to {self.experiment.sensorId}")
             self.lEditSensorId.setText(str(self.experiment.sensorId))
         self.experiment.sensorIdOk = True
         if not self.experiment.sensorIdOk:
@@ -396,6 +415,7 @@ class TqcMainWindow(QWidget):
         """
 
         self.textbox.appendPlainText(f"{msgStrPattern}")
+        logger.info(msgStrPattern)
 
 
     @asyncSlot()
