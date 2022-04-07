@@ -5,10 +5,11 @@ import logging
 baseDirC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 controllerDir = os.path.join(baseDirC, "Controller")
 MenloAPIDir = os.path.join(controllerDir, "Menlo")
+logDir = os.path.join(baseDirC, "Logs")
 
 sys.path.append(controllerDir)
 sys.path.append(MenloAPIDir)
-
+sys.path.append(logDir)
 
 import asyncio
 from asyncio.exceptions import CancelledError
@@ -17,6 +18,18 @@ from PyQt5.QtCore import pyqtSignal, QTextCodec
 from PyQt5.QtWidgets import QApplication, QWidget
 
 from Controller.Menlo.scancontrolclient import ScanControlClient, ScanControlStatus
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+formatter = logging.Formatter('%(asctime)s:%(name)s:%(message)s')
+
+file_handler = logging.FileHandler(os.path.join(logDir, 'controller.log'))
+file_handler.setFormatter(formatter)
+
+logger.addHandler(file_handler)
+
+
 
 
 class Device(QWidget):
@@ -30,24 +43,24 @@ class Device(QWidget):
 
         """ Create and initialise scanControl instance. Connection needs to be established before anything else happens"""
         super().__init__()
-
-        if isinstance(loop, QEventLoop):
-            self.client = ScanControlClient(loop = loop)
-            self.connect()
-            self.scanControl = self.client.scancontrol
-            self.numAvgs = None
-            self.isAcquiring = False                   # Flag to check if pulses are being received
-            self.keepRunning = False                   # Flag to keep runnning the processing of TDS pulses
-            self.pulseReady = self.scanControl.pulseReady
-            self.pulseData = None
-            self.avgTask = None                        # averaging task 
-            self.status = None
-            self.avgResult = None                      # result of averaging task
-            self.pulseReady.connect(self.processPulses)   
-            self.scanControl.statusChanged.connect(self._statusChanged) 
-            print("DEVICE INITIALISED")
-        else:
-            print("CLIENT ERROR:")
+        try:
+            if isinstance(loop, QEventLoop):
+                self.client = ScanControlClient(loop = loop)
+                self.connect()
+                self.scanControl = self.client.scancontrol
+                self.numAvgs = None
+                self.isAcquiring = False                   # Flag to check if pulses are being received
+                self.keepRunning = False                   # Flag to keep runnning the processing of TDS pulses
+                self.pulseReady = self.scanControl.pulseReady
+                self.pulseData = None
+                self.avgTask = None                        # averaging task 
+                self.status = None
+                self.avgResult = None                      # result of averaging task
+                self.pulseReady.connect(self.processPulses)   
+                self.scanControl.statusChanged.connect(self._statusChanged) 
+                logger.info("ScanControl Ready")
+        except:
+                logger.error("CLIENT ERROR:")
 
 
     def __str__(self):
@@ -81,7 +94,7 @@ class Device(QWidget):
         try:
             self.client.connect()
         except ConnectionRefusedError:
-             print("""> [ERROR] ConnectionRefused: Please ensure ScanControl is active, Check laser ON, 
+             logger.error("""> [ERROR] ConnectionRefused: Please ensure ScanControl is active, Check laser ON, 
                          Antenna voltage should be enabled for correct operation""")
 
 
@@ -104,7 +117,7 @@ class Device(QWidget):
         if type(begin) is int or type(begin) is float:
             self.scanControl.setBegin(begin)
         else:
-            print(f"[ERROR]: InputError: 'begin' should be a numeric value in picoseconds, got {type(begin)} instead.\n")
+            logger.error(f"[ERROR]: InputError: 'begin' should be a numeric value in picoseconds, got {type(begin)} instead.\n")
 
     
     def setDesiredAverages(self, desiredAvgs):
@@ -120,7 +133,7 @@ class Device(QWidget):
             self.numAvgs = desiredAvgs
             self.scanControl.setDesiredAverages(desiredAvgs)
         else:
-            "[ERROR]: InputError: 'num_avgs' should be positve integer value or zero "
+            logger.error("[ERROR]: InputError: 'num_avgs' should be positve integer value or zero ")
 
 
     def setEnd(self, end):
@@ -135,7 +148,7 @@ class Device(QWidget):
         if type(end) is int or type(end) is float:
             self.scanControl.setEnd(end)
         else:
-            print(f"[ERROR]: InputError: 'end' should be a numeric value in picoseconds, got {type(end)} instead.\n")
+            logger.error(f"[ERROR]: InputError: 'end' should be a numeric value in picoseconds, got {type(end)} instead.\n")
 
 
     @asyncSlot()
@@ -198,22 +211,15 @@ class Device(QWidget):
         try:
             
             await self.scanControl.start()
-            print("> [SCANCONTROL] Opening Detector") 
+            logger.info("> [SCANCONTROL] Opening Detector") 
             
-            self.isAcquiring = True    
-            print("> [SCANCONTROL] Receiving Pulses . . . ")   
+            self.isAcquiring = True  
 
-            if self.avgTask is not None and self.isAveragingDone():
-                
-                self.setDesiredAverages(1)
+            logger.info("> [SCANCONTROL] Receiving Pulses . . . ")   
 
-                print("Default/ non task avgs set to single shot")
-            elif not self.isAveragingDone() or self.avgTask is None:
-
-                print(f"No averaging task given. Averages set to : {self.scanControl.desiredAverages}")
-
+         
         except AttributeError:
-            print("> [ERROR] InitalisationError: Menlo ScanControl is not ready. Please follow normal startup using Menlo ScanControl before launching the QC app")
+            logger.error("> [ERROR] InitalisationError: Menlo ScanControl is not ready. Please follow normal startup using Menlo ScanControl before launching the QC app")
 
 
 ##################################### AsyncSlot coroutines #######################################
