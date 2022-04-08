@@ -83,7 +83,6 @@ class Experiment(QWidget):
         # self.device.setDesiredAverages(1) # default to single shot unless in averaging task
         
 
-
     def saveAverageData(self, data = None, path = "default"):
         
         """
@@ -98,7 +97,6 @@ class Experiment(QWidget):
         if data == 0:   
             data = self.device.avgResult
             
-
         currentDatetime = datetime.now()
         avgAmp = data['amplitude'][0]
         time = data['timeaxis'] - data['timeaxis'][0]  
