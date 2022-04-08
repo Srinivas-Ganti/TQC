@@ -7,7 +7,7 @@ Classification:
   width: 19
 Export:
   filename: data.dat
-  saveDir: C:\Users\TeraSmart\Documents\QC\01062022\Batch4
+  saveDir: C:\Users\TeraSmart-PC\Documents\TheaPython\TQC\qcData
   
 QC:
   allowedErrordB: 1.25
@@ -17,7 +17,7 @@ QC:
   maxViolations: 7
   qcAverages: 10
   
-  qcSaveDir: C:\Users\TeraSmart-PC\Documents\QC\01062022\Batch4
+  qcSaveDir: C:\Users\TeraSmart-PC\Documents\TheaPython\TQC\qcData
   sensorId: 1
   stdRefFileName: 2021-10-26T105509_T_NIL_RH_NIL_PID_421_SN_22311323_Reference.txt
   
