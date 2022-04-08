@@ -74,6 +74,8 @@ class Experiment(QWidget):
     
     def initialiseModel(self):
 
+        """Initialse scancontrol with startup measurement parameters"""
+
         logger.info("INITIALISING FROM BASE EXPERIMENT")
         self.device.resetAveraging()
         self.device.setBegin(self.config['TScan']['begin'])
@@ -81,7 +83,8 @@ class Experiment(QWidget):
         # self.device.setDesiredAverages(1) # default to single shot unless in averaging task
         
 
-    def saveAverageData(self, data, path = "default"):
+
+    def saveAverageData(self, data = None, path = "default"):
         
         """
             Saves data in the default folder specified in config.
@@ -91,6 +94,10 @@ class Experiment(QWidget):
             :param data: THz data (TDS and FFT)
 
         """
+     
+        if data == 0:   
+            data = self.device.avgResult
+            
 
         currentDatetime = datetime.now()
         avgAmp = data['amplitude'][0]
