@@ -277,7 +277,7 @@ class TheaQC(Experiment):
             :rtype: float
         """
 
-        minList = []
+        
         f1 = 0.71
         f2 = 0.81
         x = self.freq
@@ -433,6 +433,8 @@ class TheaQC(Experiment):
         await asyncio.sleep(0.01)
         
 
+
+
     @asyncSlot()
     async def finishQC(self):
 
@@ -456,11 +458,11 @@ class TheaQC(Experiment):
         self.timeAxis = self.timeAxis[:self.find_nearest(self.timeAxis, self.TdsWin)[0]+1]                   
         self.pulseAmp = self.pulseAmp[:self.find_nearest(self.timeAxis, self.TdsWin)[0]+1]
         self.pulseAmp = self.pulseAmp.copy()
-        self.classifyTDS()                            # Live Cartridge sensing
+        #self.classifyTDS()                            # Live Cartridge sensing
         self.freq, self.FFT = self.calculateFFT(self.timeAxis,self.pulseAmp)
         self.avgProgVal = self.device.scanControl.currentAverages/\
                                  self.device.scanControl.desiredAverages*100
-        self.checkNextSensor()
+        #self.checkNextSensor()
         await asyncio.sleep(0.1)
         
  
@@ -515,21 +517,9 @@ class TheaQC(Experiment):
         while not self.device.isAveragingDone():
             await asyncio.sleep(1)
         if self.device.isAveragingDone():
-            print(f"{self.device.scanControl.currentAverages}/{self.device.scanControl.desiredAverages}")
-            print("DONE")
-            rawExportData = np.vstack([self.timeAxis, self.pulseAmp]).T
-            currentDatetime = datetime.now()
-            header = f"""THEA QC - RAM Group GmbH, powered by Menlo Systems\nProgram Version 1.04\nAverage over {self.numAvgs} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}
-    User time axis shift: {self.config['TScan']['begin']*-1} ps
-    Time [ps]              THz Signal [mV]"""
-            base_name = f"""{currentDatetime.strftime("%d%m%yT%H%M%S")}_WID_{self.waferId}_SN_{self.sensorId}_Reference"""
-            exportPath = os.path.join(self.qcSaveDir, base_name)
-            data_file = os.path.join(exportPath.replace("/","\\") +'.txt')
-            print(data_file)
-            np.savetxt(data_file, rawExportData, header = header, delimiter = '\t' )  
+            logger.info(f"Scan completed: {self.device.scanControl.currentAverages}/{self.device.scanControl.desiredAverages}")
             
 
-            
 
     @asyncSlot()
     async def cancelTasks(self):
