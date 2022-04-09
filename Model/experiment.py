@@ -35,9 +35,12 @@ stream_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 logger.addHandler(stream_handler)
 
+        
+
 class Experiment(QWidget):
 
     configReady = pyqtSignal()
+    stopUpstream = pyqtSignal() #  signal to app to stop the controller
     
     def __init__(self, loop, config_file): 
 
@@ -50,7 +53,22 @@ class Experiment(QWidget):
         self.loadDevice()
         self.device.stop()            # Always begin in "Stop" state
         self.device.resetAveraging()  # Always begin with averaging buffer cleared
+
+
+    def makeHeader(self, kind = 'default'):
+
+        """Makes a header for the file to be saved"""
+
+        if kind == 'default':
+            currentDatetime = datetime.now()
+            header = f"""THEA QC - RAM Group GmbH & Menlo Systems GmbH\nProgram Version 1.05\nAverage over {self.device.scanControl.desiredAverages} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}, Lot number: {self.lotNum}, wafer num: {self.waferId}
+            User time axis shift: {self.config['TScan']['begin']*-1}
+            Time [ps]              THz Signal [mV]"""  
         
+        filename = f"""{currentDatetime.strftime("%y-%m-%dT%H%M%S")}_T_NIL_TH_NIL_PID_NIL_SN_{self.sensorId}_Reference.txt"""
+        
+        return header, filename
+
 
     def loadConfig(self):
         
@@ -67,6 +85,8 @@ class Experiment(QWidget):
 
     def loadDevice(self):
 
+        """Load ScanControl object"""
+
         self.device = Device(self.loop)
         self.initialiseModel()
         logger.info("DEVICE LOADED")
@@ -76,14 +96,14 @@ class Experiment(QWidget):
 
         """Initialse scancontrol with startup measurement parameters"""
 
-        logger.info("INITIALISING FROM BASE EXPERIMENT")
+        logger.info("Setting ScanControl measurement parameters")
         self.device.resetAveraging()
         self.device.setBegin(self.config['TScan']['begin'])
         self.device.setEnd(float(self.config['TScan']['begin']) + float(self.config['TScan']['window']))
         # self.device.setDesiredAverages(1) # default to single shot unless in averaging task
         
 
-    def saveAverageData(self, data = None, path = "default"):
+    def saveAverageData(self, data = None, path = "default", header = 'default'):
         
         """
             Saves data in the default folder specified in config.
@@ -93,19 +113,17 @@ class Experiment(QWidget):
             :param data: THz data (TDS and FFT)
 
         """
-     
-        if data == 0:   
+
+        if header == 'default':
+            header, filename = self.makeHeader(kind = 'default')
+        
+        if data == 0: 
             data = self.device.avgResult
-            
-        currentDatetime = datetime.now()
+        
         avgAmp = data['amplitude'][0]
         time = data['timeaxis'] - data['timeaxis'][0]  
         tds = np.vstack([time, avgAmp]).T
 
-        header = f"""THEA QC - RAM Group GmbH, powered by Menlo Systems\nProgram Version 1.05\nAverage over {self.device.scanControl.desiredAverages} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}
-    User time axis shift: {self.config['TScan']['begin']*-1}
-    Time [ps]              THz Signal [mV]"""    
-        
         if path == "default":
             dataFolder = self.config['Export']['saveDir']
         else:
@@ -115,14 +133,8 @@ class Experiment(QWidget):
             savingFolder = os.path.join(dataFolder, todayFolder)
             if not os.path.isdir(savingFolder):
                 os.makedirs(savingFolder)
-
-            filename = self.config['Export']['filename']
-            baseName = filename.split('.')[0]
-            ext = filename.split('.')[-1]
-            i = 1
-            while os.path.isfile(os.path.join(savingFolder, f'{baseName}_{i:04d}.{ext}')):
-                i+=1
-            dataFile = os.path.join(savingFolder, f'{baseName}_{i:04d}.{ext}')
+        
+            dataFile = os.path.join(savingFolder, f'{filename}')
             np.savetxt(dataFile, tds, header = header)
         except:
             logger.error("Invalid file path to export averaging data")
