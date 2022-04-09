@@ -35,10 +35,12 @@ stream_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 logger.addHandler(stream_handler)
 
+
 class TheaQC(Experiment):
 
     sensorUpdateReady = pyqtSignal()
     qcUpdateReady = pyqtSignal()
+    
     
     def __init__(self, loop = None, configFile = None):
         
@@ -128,6 +130,7 @@ class TheaQC(Experiment):
         self.tdsParams = {}                        # Empty dictionary to hold TDS pulse parameters
         self.currentAverageFft = None              # averaged pulse FFT
         self.chipsPerWafer = None                  # Parameter to trigger wafer ID change (not used)
+        self.stdRefDir = None                      # Directory path for std refs.
         self.classificationDistance = None         # Pulse peak fitting parameters for classification- distance (see scipy.find_peaks())
         self.classificationProminence = None
         self.classificationWidth = None
@@ -166,6 +169,8 @@ class TheaQC(Experiment):
                         'nErrV':self.config['QC']['maxViolations']}
         self.qcNumAvgs = self.config['QC']['qcAverages']
         self.chipsPerWafer = self.config['QC']['chipsPerWafer']
+        self.stdRefDir = self.config['QC']['stdRefDir']
+        self.lotNum = self.config['QC']['lotNum']
         qcSaveDir = self.config['QC']['qcSaveDir']
         if qcSaveDir is None or not os.path.isdir(qcSaveDir):
             self.qcSaveDir = os.path.join(baseDir, "qcData")
@@ -250,21 +255,20 @@ class TheaQC(Experiment):
         self.sensorUpdateReady.emit()  
 
 
-    async def measureSensor(self):
-    
-        """Coroutine to measure sensor during QC"""
-    
-        if self.classification == "Sensor":
+    async def quickScan(self):
 
-            self.device.setDesiredAverages(self.qcNumAvgs)        
-            print("Sensor confirmed, begin processing cartridge")
-            await self.startAveraging(self.qcNumAvgs)
-            while not self.device.isAveragingDone():
-                await asyncio.sleep(0.5)
+        """Collect single shot data and then restore to default value"""
 
-            self.device.avgTask = None
-            self.device.setDesiredAverages(1)
-
+        
+        logger.info("Begin quick scan")
+        await self.startAveraging(1)
+        while not self.device.isAveragingDone():
+            await asyncio.sleep(0.5)
+        # self.inputAvgsChanged.emit()
+        self.device.avgTask = None
+        self.classifyTDS()
+        #self.device.setDesiredAverages(self.numAvgs)
+        
 
     def findResonanceMinima(self,data):
 
@@ -277,7 +281,6 @@ class TheaQC(Experiment):
             :rtype: float
         """
 
-        
         f1 = 0.71
         f2 = 0.81
         x = self.freq
@@ -471,30 +474,12 @@ class TheaQC(Experiment):
 
         """Measure standard reference for QC and update config file."""
    
-        await self.measureSensor()
-    
-        if self.device.isAveragingDone():
-            rawExportData = np.vstack([self.timeAxis, self.pulseAmp]).T
-            currentDatetime = datetime.now()
-            header = f"""THEA QC - RAM Group GmbH, powered by Menlo Systems\nProgram Version 1.04\nAverage over {self.numAvgs} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}
-    User time axis shift: {self.config['TScan']['begin']*-1}
-    Time [ps]              THz Signal [mV]"""
-            base_name = f"""{currentDatetime.strftime("%d%m%yT%H%M%S")}_WID_{self.waferId}_SN_{self.sensorId}_STANDARD_Reference"""
-            refPath = os.path.join(rscDir,"StandardReferences", base_name)
-            data_file = os.path.join(refPath.replace("/","\\") +'.txt')
-            
-            np.savetxt(data_file, rawExportData, header = header, delimiter = '\t' )  
-            
-            newStdRef = data_file.split('/')[-1]
-            self.config['QC']['stdRefFileName'] = newStdRef
-            with open(os.path.join(configDir,"theaConfig.yml"), 'w') as f:
-                f.write(yaml.dump(self.config, default_flow_style = False))
-            
-            self.loadConfig()
-            self.initialise()
-            self.loadStandardRef()
-            logger.info("STD REF LOADED")
-            
+        await self.quickScan()
+        if self.classification == "Sensor":
+            await self.startAveraging(self.qcNumAvgs)
+            if self.device.isAveragingDone():
+                self.saveAverageData(data = self.device.avgResult, path = self.stdRefDir)
+                self.stopUpstream.emit()
 
     @asyncSlot()
     async def startAveraging(self, numAvgs = None):
