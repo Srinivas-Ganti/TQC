@@ -15,14 +15,14 @@ QC:
   handlingTime: 2s
   lowerFreqBound: 0.5
   maxViolations: 7
-  qcAverages: 10
-  
+  qcAverages: 40
   qcSaveDir: C:\Users\TeraSmart-PC\Documents\TheaPython\TQC\qcData
-  sensorId: 1
   stdRefFileName: 2021-10-26T105509_T_NIL_RH_NIL_PID_421_SN_22311323_Reference.txt
-  
+  stdRefDir: C:\Users\TeraSmart-PC\Documents\TheaPython\TQC\Resources\StandardReferences
   upperFreqBound: 0.9
-  waferId: W0000
+  lotNum : 01
+  sensorId: 001
+  waferId: AA0001
 Robots:
   baudrate: 115200
   port: COM5
@@ -31,7 +31,7 @@ Spectrometer:
   systemNum: 0
 TScan:
   begin: -271
-  numAvgs: 40
+  numAvgs: 5
   window: 400
 Temp:
   airFileNames:
