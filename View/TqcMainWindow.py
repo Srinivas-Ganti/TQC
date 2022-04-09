@@ -44,11 +44,11 @@ class TqcMainWindow(QWidget):
     def __init__(self, experiment = None):
 
         super().__init__()
-        
+        logger.info("THEA QC 1.05 - Session started")
         self.experiment = experiment
         self.initUI()
         self.openSerial()
-
+        
     
     def openSerial(self):
         
@@ -63,7 +63,7 @@ class TqcMainWindow(QWidget):
         """
             Connect GUI object and validator signals to respective methods.
         """
-      
+        
         self.experiment.device.scanControl.statusChanged.connect(self._statusChanged)
         self.experiment.serial.readyRead.connect(self.receive)
         self.experiment.device.pulseReady.connect(self.processPulses)
@@ -76,7 +76,8 @@ class TqcMainWindow(QWidget):
         
         
         self.btnStartAveraging.clicked.connect(self.experiment.startAveraging)
-        #self.btnStart.clicked.connect(self.experiment.device.start)
+
+        self.btnSaveData.clicked.connect(self.experiment.saveAverageData)
         self.btnStop.clicked.connect(self.experiment.device.stop) 
         self.btnStop.clicked.connect(self.stop) 
         self.btnStop.clicked.connect(self.experiment.cancelTasks)
@@ -102,11 +103,12 @@ class TqcMainWindow(QWidget):
     
         self.lEditWaferId.editingFinished.connect(self.validateEditWaferId)
         self.lEditSensorId.editingFinished.connect(self.validateEditSensorId)
+        self.experiment.stopUpstream.connect(self.stopListener)
 
 
     def avgsChanged(self):
 
-        print(f"Experiment averages changed to : {self.experiment.numAvgs}")
+        logger.info(f"Experiment averages changed to : {self.experiment.numAvgs}")
 
 
     def checkNextSensor(self):
@@ -123,7 +125,11 @@ class TqcMainWindow(QWidget):
             #     self.qCcurrentMsg.setText("NEXT SENSOR")
 
             
+    def stopListener(self):
 
+        """Listening for stop request from model level"""
+
+        self.btnStop.clicked.emit()
 
 
     def mouseMoved(self, evt):
@@ -209,7 +215,10 @@ class TqcMainWindow(QWidget):
         self.lEditWaferId.editingFinished.emit()
         
         self.lEditSensorId.setText(str(self.experiment.config['QC']['sensorId']))
-        self.lEditSensorId.editingFinished.emit()         
+        self.lEditSensorId.editingFinished.emit()     
+
+        self.lEditLotNum.setText(str(self.experiment.config['QC']['lotNum']))  
+        self.lEditLotNum.editingFinished.emit()  
         
         if self.experiment.waferIdOk and self.experiment.sensorIdOk:
             self.btnStartQC.setEnabled(True)        
@@ -272,24 +281,17 @@ class TqcMainWindow(QWidget):
         self.experiment.waferIdOk = False
         wId = self.lEditWaferId.text()
         
-        if wId.startswith("W"):
-            try:    
-                wnum = int(wId.split("W")[1])
-                logger.info(f"Wafer ID ACCEPTED: W{wnum}")
-                self.experiment.waferId = f"W{wnum}"
-            except ValueError:
-                logger.warning("Wafer ID must follow the pattern 'W<integer>'")
-                logger.warning("Setting default config value")
-                self.lEditWaferId.setText(self.experiment.config['QC']['waferId'])
-                self.experiment.waferId = self.experiment.config['QC']['waferId']
-        else:
-            print("Wafer ID must follow the pattern 'W<integer>'")
-            print("Setting default config value")
+        try:    
+            assert wId[:2].isalpha()
+            assert int(wId[2:])
+            logger.info(f"Wafer ID ACCEPTED: {wId}")
+            self.experiment.waferId = wId
+        except AssertionError:
+            logger.warning("Wafer ID must follow the pattern 'AA0001, AB0001 etc'")
+            logger.warning("Setting default config value")
             self.lEditWaferId.setText(self.experiment.config['QC']['waferId'])
             self.experiment.waferId = self.experiment.config['QC']['waferId']
         self.experiment.waferIdOk = True
-        if not self.experiment.waferIdOk:
-            self.btnStartQC.setEnabled(False)
         
 
     def validateEditSensorId(self):
@@ -391,7 +393,7 @@ class TqcMainWindow(QWidget):
         
         # self.btnStartQC.setEnabled(False)
         self.btnFinishQC.setEnabled(False)
-        self.btnNewStdRef.setEnabled(False)
+        # self.btnNewStdRef.setEnabled(False)
 
 
     def enableButtons(self):
@@ -402,6 +404,7 @@ class TqcMainWindow(QWidget):
 
         
         # self.btnStart.setEnabled(True)
+        self.btnNewStdRef.setEnabled(True)
         self.btnStop.setEnabled(True)
         self.btnStartQC.setEnabled(True)
         self.btnStartAveraging.setEnabled(True)
@@ -482,7 +485,7 @@ class TqcMainWindow(QWidget):
         self.message("> [MESSAGE]: Recording new standard reference for QC . . .")
         self.btnNewStdRef.setEnabled(False)
         # self.btnStartAveraging.clicked.emit()
-        self.message(f"> [MESSAGE]: RELOADING CONFIG, updating internal reference")
+        self.message(f"> [MESSAGE]: RELOADING CONFIG, updating internal reference . . . ")
         
     	
     @asyncSlot()
@@ -566,13 +569,13 @@ class TqcMainWindow(QWidget):
 
         await asyncio.sleep(0.01)
         
-        if not self.experiment.qcRunning:
-            self.btnStartQC.setEnabled(True)
-            if self.experiment.classification == "Sensor":
-                self.btnNewStdRef.setEnabled(True)
-        elif self.experiment.qcRunNum > 0:
-            self.btnStartQC.setEnabled(False)
-            self.btnNewStdRef.setEnabled(False)
+        # if not self.experiment.qcRunning:
+        #     self.btnStartQC.setEnabled(True)
+        #     if self.experiment.classification == "Sensor":
+        #         self.btnNewStdRef.setEnabled(True)
+        # elif self.experiment.qcRunNum > 0:
+        #     self.btnStartQC.setEnabled(False)
+        #     self.btnNewStdRef.setEnabled(False)
 
         if self.experiment.device.isAcquiring:
             self.lEditTdsAvgs.setText(str(self.experiment.device.numAvgs))
