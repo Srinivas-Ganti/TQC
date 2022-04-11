@@ -100,7 +100,7 @@ class TqcMainWindow(QWidget):
         self.lEditTdsEnd.setReadOnly(True)
         self.lEditTdsAvgs.editingFinished.connect(self.validateEditAverages)
         self.lEditTdsAvgs.textChanged.connect(self.avgsChanged)
-    
+        self.lEditLotNum.editingFinished.connect(self.validateEditLotNum)
         self.lEditWaferId.editingFinished.connect(self.validateEditWaferId)
         self.lEditSensorId.editingFinished.connect(self.validateEditSensorId)
         self.experiment.stopUpstream.connect(self.stopListener)
@@ -251,6 +251,26 @@ class TqcMainWindow(QWidget):
         logger.info("QC config loaded")
         
     
+    def validateEditLotNum(self):
+
+        """
+            Validate user input for required number of averages.
+        """
+                
+        validationRule = QIntValidator(1,99)
+        logger.info(validationRule.validate(self.lEditLotNum.text(),2000))
+        if validationRule.validate(self.lEditLotNum.text(),
+                                   99)[0] == QValidator.Acceptable:
+            logger.info("Wafer Lot Number Accepted")
+            self.experiment.lotNumOk = True
+            self.experiment.lotNum = int(self.lEditLotNum.text())
+        else:
+            logger.error("[ERROR] InvalidInput: Setting default config value")
+            self.lEditLotNum.setText(str(self.experiment.config['QC']['lotNUm']))
+        self.experiment.lotNumOk = True
+        
+
+
     def validateEditAverages(self):
 
         """
@@ -460,6 +480,7 @@ class TqcMainWindow(QWidget):
             codec = QTextCodec.codecForName("UTF-8")
             line = codec.toUnicode(self.experiment.serial.readLine()).strip()
             self.message(line)
+            self.experiment.lastMessage = line
 
 
     @asyncSlot()
