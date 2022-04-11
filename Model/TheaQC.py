@@ -16,7 +16,7 @@ from Resources import ur
 from MenloLoader import MenloLoader
 from PyQt5 import QtSerialPort
 from scipy.signal import find_peaks
-
+from asyncTimer import Timer
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -104,7 +104,8 @@ class TheaQC(Experiment):
         self.port = None                                      # Serial port name
         self.baudrate = None                                  # baudrate for serial communication  
         self.serial = None                                    # Serial object to communicate with robots
-
+        self.lastMessage = None                               # Store the last message received from the robot
+        
 
     def initAttribs(self):
 
@@ -125,6 +126,7 @@ class TheaQC(Experiment):
         self.numAvgs = None                        # number of set averages
         self.startTime = None                      # TDS pulse start time (ps)
         self.endTime = None                        # TDS pulse end time (ps)
+        self.lotNum = None                         # Wafer Lot number
         self.waferId = None                        # QC wafer ID
         self.sensorId = None                       # QC sensor ID
         self.tdsParams = {}                        # Empty dictionary to hold TDS pulse parameters
@@ -139,7 +141,7 @@ class TheaQC(Experiment):
         self.qcAvgResult = None                    # Store QC averagining result 
         self.qcStep = None
         self.qcResults = {}                        # Store QC results from current session
-
+        self.state = -1                             # QC state machine. Load in 'starting state' 
 
     def loadDcBkg(self):
 
@@ -227,23 +229,23 @@ class TheaQC(Experiment):
         
         if self.find_nearest(self.pulsePeaks['distance'][0], 250)[1]  > 260: # checking array indices not values
             isSensor += 1 
-            #logger.debug("CLASSIFICATION DISTANCE : SENSOR")
+            logger.debug("CLASSIFICATION DISTANCE : SENSOR")
         else:
             isAir += 1   
-            #logger.debug("CLASSIFICATION DISTANCE : AIR")
+            logger.debug("CLASSIFICATION DISTANCE : AIR")
         
         if len(self.pulsePeaks['threshold'][0]) > 3:
             isAir += 1     
-            #logger.debug("CLASSIFICATION THRESHOLD : AIR")
+            logger.debug("CLASSIFICATION THRESHOLD : AIR")
         else:
             isSensor += 1
-            #logger.debug("CLASSIFICATION THRESHOLD : SENSOR")
+            logger.debug("CLASSIFICATION THRESHOLD : SENSOR")
         if len(self.pulsePeaks['prominence'][0]) > 4:
             isAir += 1    
-            #logger.debug("CLASSIFICATION PROMINENCE : AIR")
+            logger.debug("CLASSIFICATION PROMINENCE : AIR")
         else:
             isSensor +=1  
-            #logger.debug("CLASSIFICATION PROMINENCE : SENSOR")
+            logger.debug("CLASSIFICATION PROMINENCE : SENSOR")
         sensorUpdate = {'isSensor': isSensor, 'isAir': isAir}
 
         if sensorUpdate['isAir'] < sensorUpdate['isSensor']:
@@ -263,9 +265,10 @@ class TheaQC(Experiment):
         logger.info("Begin quick scan")
         await self.startAveraging(1)
         while not self.device.isAveragingDone():
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(1)
         # self.inputAvgsChanged.emit()
         self.device.avgTask = None
+        await asyncio.sleep(2)            
         self.classifyTDS()
         #self.device.setDesiredAverages(self.numAvgs)
         
@@ -467,19 +470,50 @@ class TheaQC(Experiment):
                                  self.device.scanControl.desiredAverages*100
         #self.checkNextSensor()
         await asyncio.sleep(0.1)
-        
- 
+            
+
+    async def waitForAck(self):
+
+        """Wait for ACK from Robot"""
+
+        while self.lastMessage != 'ACK':
+            logger.info("Waiting for ACK")
+            await asyncio.sleep(1)
+        logger.info("ACK received")
+            
+
+
+
     @asyncSlot()
     async def measureStandardRef(self):
 
         """Measure standard reference for QC and update config file."""
    
         await self.quickScan()
-        if self.classification == "Sensor":
-            await self.startAveraging(self.qcNumAvgs)
-            if self.device.isAveragingDone():
-                self.saveAverageData(data = self.device.avgResult, path = self.stdRefDir)
-                self.stopUpstream.emit()
+        if self.classification == 'Air':
+            self.lastMessage = " " #  clear previous ACK
+            await self.insertCartridge()
+            logger.info(f"last message : {self.lastMessage}")
+            try:
+                task = asyncio.create_task(self.waitForAck())
+                await asyncio.wait_for(task, timeout = 5)
+
+            except asyncio.exceptions.TimeoutError:
+                logger.error(f"[ERROR]: ACK not received")
+                return
+            
+        await asyncio.sleep(1)            
+        self.classifyTDS()
+        await self.startAveraging(self.qcNumAvgs)
+        
+        
+        if self.device.isAveragingDone():
+            self.saveAverageData(data = self.device.avgResult, path = self.stdRefDir)
+            self.stopUpstream.emit()
+
+
+
+
 
     @asyncSlot()
     async def startAveraging(self, numAvgs = None):
