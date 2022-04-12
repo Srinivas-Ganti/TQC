@@ -123,11 +123,20 @@ class MenloLoader:
         for j in range(len(filesrclist)):
             with open(filesrclist[j]) as dtr: 
                 for com in dtr:
-                    if com.startswith('#') and "Timestamp" in com:
+                    if com.startswith('#') and "Timestamp" in com and 'wafer' not in com:
                         dtlist.append(
                                       datetime.datetime.strptime(com.split('Timestamp')[1]\
                                                                  .split('\n')[0][2:],
-                                                                '%Y-%m-%dT%H:%M:%S'))                   
+                                                                '%y-%m-%dT%H:%M:%S'))                   
+                    elif com.startswith('#') and "Timestamp" in com and 'wafer' in com:
+                        try:
+                            dtlist.append(
+                                          datetime.datetime.strptime(com.split('Timestamp')[1].split(',')[0] \
+                                                                 .split('\n')[0][2:][2:],
+                                                                '%y-%m-%dT%H:%M:%S'))                   
+                        except ValueError:                                                            
+                            print("Incorrect file type")
+
         return dtlist
 
     
