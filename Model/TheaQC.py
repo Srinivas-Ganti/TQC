@@ -142,6 +142,8 @@ class TheaQC(Experiment):
         self.qcStep = None
         self.qcResults = {}                        # Store QC results from current session
         self.state = -1                             # QC state machine. Load in 'starting state' 
+        self.timeout = None
+
 
     def loadDcBkg(self):
 
@@ -160,6 +162,7 @@ class TheaQC(Experiment):
         """
             Load QC paramters for comparitive error checking against standard reference from config file.
         """
+        
         self.loadStandardRef()
         self.classificationDistance = self.config['Classification']['distance']
         self.classificationProminence = self.config['Classification']['prominence']
@@ -174,6 +177,8 @@ class TheaQC(Experiment):
         self.stdRefDir = self.config['QC']['stdRefDir']
         self.lotNum = self.config['QC']['lotNum']
         qcSaveDir = self.config['QC']['qcSaveDir']
+        self.timeout = self.config['Robots']['timeout']
+
         if qcSaveDir is None or not os.path.isdir(qcSaveDir):
             self.qcSaveDir = os.path.join(baseDir, "qcData")
             print(f"Setting default directory for qcData at: {self.qcSaveDir}")
@@ -207,8 +212,9 @@ class TheaQC(Experiment):
             self.stdRef = stdRefData
             logger.info("Standard reference loaded")
             logger.info(self.stdRef)
-        except:
+        except FileNotFoundError:
             logger.error(f"[ERROR]: FileNotFound. No resource file called {self.config['QC']['stdRefFileName']}")
+        
 
 
     def classifyTDS(self):
@@ -297,6 +303,15 @@ class TheaQC(Experiment):
 
 ##################################### AsyncSlot coroutines #######################################
 
+    async def waiter(self):
+        
+        try:
+            task = asyncio.create_task(self.waitForAck())
+            await asyncio.wait_for(task, timeout = self.timeout)
+
+        except asyncio.exceptions.TimeoutError:
+            logger.error(f"[ERROR]: ACK not received")
+            return
 
     @asyncSlot()
     async def ejectCartridge(self):
@@ -491,25 +506,39 @@ class TheaQC(Experiment):
    
         await self.quickScan()
         if self.classification == 'Air':
-            self.lastMessage = " " #  clear previous ACK
+            self.lastMessage = " "      #  clear previous ACK if any
             await self.insertCartridge()
             logger.info(f"last message : {self.lastMessage}")
             try:
                 task = asyncio.create_task(self.waitForAck())
-                await asyncio.wait_for(task, timeout = 5)
+                await asyncio.wait_for(task, timeout = self.timeout)
 
             except asyncio.exceptions.TimeoutError:
                 logger.error(f"[ERROR]: ACK not received")
                 return
             
-        await asyncio.sleep(1)            
+        await asyncio.sleep(1)            # test without sleep            
         self.classifyTDS()
         await self.startAveraging(self.qcNumAvgs)
-        
-        
+
         if self.device.isAveragingDone():
-            self.saveAverageData(data = self.device.avgResult, path = self.stdRefDir)
+            self.saveAverageData(data = self.device.avgResult, path = self.stdRefDir, headerType = 'stdRef')
             self.stopUpstream.emit()
+        self.config['QC']['stdRefFileName'] = self.lastFile
+        print(self.lastFile)
+
+        with open(self.config_file, 'w') as f:
+            # print(self.config)
+            f.write(yaml.dump(self.config, default_flow_style = False))
+            print(self.config)
+            f.close()
+            self.loadConfig()
+            self.loadQcConfig()
+            
+            
+            
+            logger.info("STD REF LOADED")            
+
 
 
 
