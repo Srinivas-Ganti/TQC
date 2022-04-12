@@ -53,7 +53,8 @@ class Experiment(QWidget):
         self.loadDevice()
         self.device.stop()            # Always begin in "Stop" state
         self.device.resetAveraging()  # Always begin with averaging buffer cleared
-
+        self.stdRefDir = None         # path to std ref dir
+        self.lastFile = None          # Full path of the last file being saved
 
     def makeHeader(self, kind = 'default'):
 
@@ -103,7 +104,7 @@ class Experiment(QWidget):
         # self.device.setDesiredAverages(1) # default to single shot unless in averaging task
         
 
-    def saveAverageData(self, data = None, path = "default", header = 'default'):
+    def saveAverageData(self, data = None, path = "default", headerType = 'default'):
         
         """
             Saves data in the default folder specified in config.
@@ -114,8 +115,9 @@ class Experiment(QWidget):
 
         """
 
-        if header == 'default':
+        if headerType in ['default', 'stdRef']:
             header, filename = self.makeHeader(kind = 'default')
+            # Note to self: handle exceptions here
         
         if data == 0: 
             data = self.device.avgResult
@@ -135,7 +137,11 @@ class Experiment(QWidget):
                 os.makedirs(savingFolder)
         
             dataFile = os.path.join(savingFolder, f'{filename}')
-            np.savetxt(dataFile, tds, header = header)
+            if headerType == 'stdRef':
+                self.lastFile = dataFile.split(self.stdRefDir)[1][1:]
+            else:
+                self.lastFile = filename
+            np.savetxt(dataFile, tds, delimiter = '\t' , header = header)
         except:
             logger.error("Invalid file path to export averaging data")
 
