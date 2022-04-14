@@ -461,7 +461,7 @@ class TqcMainWindow(QWidget):
                 self.lEditTdsAvgs.setText(str(self.experiment.qcNumAvgs))
                 self.lEditTdsAvgs.editingFinished.emit()    
 
-            stdRefPlot = self.plot(self.experiment.freq, 20*np.log(np.abs(self.experiment.stdRef.FFT[0])))
+            stdRefPlot = self.plot(self.experiment.stdRef.freq[0], 20*np.log(np.abs(self.experiment.stdRef.FFT[0])))
             stdRefPlot.curve.setPen(color = self.colorstdRef, width = self.averagePlotLineWidth)
 
 
@@ -635,6 +635,7 @@ if __name__ == '__main__':
 
     with loop:
         sys.exit(loop.run_forever())
+        
 
 
     
