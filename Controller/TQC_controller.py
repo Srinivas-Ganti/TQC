@@ -81,7 +81,7 @@ class Device(QWidget):
             Reset scancontrol averages
         """
 
-        print("> [SCANCONTROL] Resetting averages")
+        logger.info("> [SCANCONTROL] Resetting averages")
         # self.qcResult = None
         self.scanControl.resetAveraging()
 
