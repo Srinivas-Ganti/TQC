@@ -49,24 +49,42 @@ class Experiment(QWidget):
         
         self.config_file = config_file
         self.configLoaded = False
-        self.loadConfig()
-        self.loadDevice()
-        self.device.stop()            # Always begin in "Stop" state
-        self.device.resetAveraging()  # Always begin with averaging buffer cleared
-        self.stdRefDir = None         # path to std ref dir
-        self.lastFile = None          # Full path of the last file being saved
+        try:
+            self.loadConfig()
+            self.loadDevice()
+            self.device.stop()            # Always begin in "Stop" state
+            self.device.resetAveraging()  # Always begin with averaging buffer cleared
+            self.stdRefDir = None         # path to std ref dir
+            self.lastFile = None          # Full path of the last file being saved
+        except AttributeError:
+            logger.error("Scan Control not found. Please ensure Menlo ScanControl is ON")
+        except FileNotFoundError:
+            logger.error("Problem loading config file, check file path")
+        
+
 
     def makeHeader(self, kind = 'default'):
 
         """Makes a header for the file to be saved"""
 
+        currentDatetime = datetime.now()
+        
         if kind == 'default':
-            currentDatetime = datetime.now()
+
+            
             header = f"""THEA QC - RAM Group GmbH & Menlo Systems GmbH\nProgram Version 1.05\nAverage over {self.device.scanControl.desiredAverages} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}, Lot number: {self.lotNum}, wafer num: {self.waferId}
             User time axis shift: {self.config['TScan']['begin']*-1}
             Time [ps]              THz Signal [mV]"""  
-        
-        filename = f"""{currentDatetime.strftime("%y-%m-%dT%H%M%S")}_T_NIL_TH_NIL_PID_NIL_SN_{self.sensorId}_Reference.txt"""
+
+            filename = f"""{currentDatetime.strftime("%y-%m-%dT%H%M%S")}_T_NIL_RH_NIL_PID_NIL_SN_{self.sensorId}_Reference.txt"""    
+
+        if kind == 'qc':
+
+            header = f"""THEA QC - RAM Group GmbH, powered by Menlo Systems\nProgram Version 1.05\nAverage over {self.numAvgs} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}
+            User time axis shift: {self.config['TScan']['begin']*-1}, QC Parameters: {self.qcParams}
+            Time [ps]              THz Signal [mV]"""
+
+        filename = f"""{currentDatetime.strftime("%y-%m-%dT%H%M%S")}_T_NIL_RH_NIL_PID_NIL_SN_{self.sensorId}_{self.qcResult}_Reference.txt"""    
         
         return header, filename
 
@@ -117,14 +135,24 @@ class Experiment(QWidget):
 
         if headerType in ['default', 'stdRef']:
             header, filename = self.makeHeader(kind = 'default')
+        elif headerType == 'qc':
+            header, filename = self.makeHeader(kind = 'qc')
+            
             # Note to self: handle exceptions here
         
         if data == 0: 
             data = self.device.avgResult
-        
-        avgAmp = data['amplitude'][0]
-        time = data['timeaxis'] - data['timeaxis'][0]  
-        tds = np.vstack([time, avgAmp]).T
+            logger.info("Saving last averaged result")
+        else:
+            logger.info("Saving result from received data object")
+
+        try:
+            avgAmp = data['amplitude'][0]
+            time = data['timeaxis'] - data['timeaxis'][0]  
+            tds = np.vstack([time, avgAmp]).T
+        except TypeError:
+            logger.error("No data to save")
+            return
 
         if path == "default":
             dataFolder = self.config['Export']['saveDir']
