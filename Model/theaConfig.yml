@@ -8,24 +8,24 @@ Classification:
 Export:
   filename: data.dat
   saveDir: C:\Users\TeraSmart-PC\Documents\TheaPython\TQC\qcData
-  
 QC:
   allowedErrordB: 1.25
   chipsPerWafer: 10000
   handlingTime: 2s
+  lotNum: 1
   lowerFreqBound: 0.5
   maxViolations: 7
-  qcAverages: 40
+  qcAverages: 5
   qcSaveDir: C:\Users\TeraSmart-PC\Documents\TheaPython\TQC\qcData
-  stdRefFileName: 2021-10-26T105509_T_NIL_RH_NIL_PID_421_SN_22311323_Reference.txt
+  sensorId: 1
   stdRefDir: C:\Users\TeraSmart-PC\Documents\TheaPython\TQC\Resources\StandardReferences
+  stdRefFileName: 2022-04-14\22-04-14T144600_T_NIL_TH_NIL_PID_NIL_SN_1_Reference.txt
   upperFreqBound: 0.9
-  lotNum : 01
-  sensorId: 001
   waferId: AA0001
 Robots:
   baudrate: 115200
   port: COM5
+  timeout: 10
 Spectrometer:
   name: TERASMART
   systemNum: 0
