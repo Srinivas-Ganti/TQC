@@ -15,11 +15,11 @@ QC:
   lotNum: 1
   lowerFreqBound: 0.5
   maxViolations: 7
-  qcAverages: 5
+  qcAverages: 15
   qcSaveDir: C:\Users\TeraSmart-PC\Documents\TheaPython\TQC\qcData
   sensorId: 1
   stdRefDir: C:\Users\TeraSmart-PC\Documents\TheaPython\TQC\Resources\StandardReferences
-  stdRefFileName: 2022-04-14\22-04-14T144600_T_NIL_TH_NIL_PID_NIL_SN_1_Reference.txt
+  stdRefFileName: 2022-04-15\22-04-15T123926_T_NIL_RH_NIL_PID_NIL_SN_1_None_Reference.txt
   upperFreqBound: 0.9
   waferId: AA0001
 Robots:
