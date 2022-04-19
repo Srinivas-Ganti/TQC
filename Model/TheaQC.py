@@ -425,7 +425,7 @@ class TheaQC(Experiment):
                         
                         self.compareToStdRef()
                         self.saveAverageData(data = self.qcAvgResult, path = self.qcSaveDir, headerType = 'qc') 
-                        self.device.stop()
+                        await self.device.stop()
                     ## mechanical loop
                     self.ejectCartridge()
                     await self.waitOnRobot()
