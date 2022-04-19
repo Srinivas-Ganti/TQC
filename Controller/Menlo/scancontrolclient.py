@@ -132,6 +132,6 @@ class ScanControlClient(QObject):
         url = "ws://" + self.host + ":" + self.port
 
 
-        proto = self.loop.run_until_complete(websockets.client.connect(url, create_protocol=QWebChannelWebSocketProtocol))
+        proto = self.loop.run_until_complete(websockets.client.connect(url, create_protocol=QWebChannelWebSocketProtocol, ping_interval=None))
         self.loop.run_until_complete(self._establish_connection(proto.webchannel))
 
