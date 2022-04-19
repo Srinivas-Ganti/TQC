@@ -193,9 +193,10 @@ class Device(QWidget):
         if self.avgTask is not None:
             self.resetAveraging()
             if not self.isAcquiring:
-                self.start()            
+                await self.start()       
+                await asyncio.sleep(2)     
             while not self.isAveragingDone():
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.1)
             if self.isAveragingDone():
                 avgData = self.pulseData
                 self.dataUpdateReady.emit(avgData)
