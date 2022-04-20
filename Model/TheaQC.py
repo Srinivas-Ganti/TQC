@@ -3,6 +3,7 @@ import os
 
 from pint.errors import UndefinedUnitError
 from pyqtgraph.graphicsItems.PlotDataItem import dataType
+import pandas as pd
 
 baseDir =  os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 rscDir = os.path.join(baseDir, "Resources")
@@ -143,7 +144,12 @@ class TheaQC(Experiment):
         self.qcResults = {}                        # Store QC results from current session
         self.state = -1                             # QC state machine. Load in 'starting state' 
         self.timeout = None
+        self.ackTask = None                         # wait for ack with timeout
         self.quickScanTask = None                 # task for performing a quick scan
+        self.qcAvgTask = None                       # QC averaging task
+        self.qcLoopTask = None                      # QC test loop
+        self.sessionName = None                     # Name of report
+
 
     def loadDcBkg(self):
 
@@ -177,6 +183,7 @@ class TheaQC(Experiment):
         self.stdRefDir = self.config['QC']['stdRefDir']
         self.lotNum = self.config['QC']['lotNum']
         qcSaveDir = self.config['QC']['qcSaveDir']
+        self.reportsDir = self.config['QC']['ReportsDir']
         self.timeout = self.config['Robots']['timeout']
 
         if qcSaveDir is None or not os.path.isdir(qcSaveDir):
@@ -272,12 +279,11 @@ class TheaQC(Experiment):
         await self.startAveraging(1)
         while not self.device.isAveragingDone():
             await asyncio.sleep(0.5)
-        # self.inputAvgsChanged.emit()
-        self.device.avgTask = None
-        # await asyncio.sleep(1)            
+        
+        self.device.avgTask = None         
         await self.classifyTDS()
         self.device.stop()
-        #self.device.setDesiredAverages(self.numAvgs)
+        
         
 
     def findResonanceMinima(self,data):
@@ -300,41 +306,38 @@ class TheaQC(Experiment):
         y = 20*np.log(np.abs(data))[fStartId:fEndId]
         rMinima = f[np.argmin(y)]
         return rMinima
-        
+
+
+    def generateReport(self):
+
+        """Dump results from QC session as a csv"""
+
+        df = pd.DataFrame(self.qcResultsList + [self.qcParams])
+        logger.info("Exporting QC report to Reports dir")
+        try:       
+            df.to_csv(os.path.join(self.reportsDir,f'{self.sessionName}.csv'))
+
+        except Exception as e:
+            raise e
 
 ##################################### AsyncSlot coroutines #######################################
 
-    # async def waiter(self):
-        
-    #     try:
-    #         task = asyncio.create_task(self.waitForAck())
-    #         await asyncio.wait_for(task, timeout = self.timeout)
-
-    #     except asyncio.exceptions.TimeoutError:
-    #         logger.error(f"[ERROR]: ACK not received")
-    #         return
-
-    # @asyncSlot()
     def ejectCartridge(self):
 
         """Send command on serial to eject cartridge"""
 
-        # await asyncio.sleep(0.1)
         txt = "EJECT\n"
         self.serial.write(txt.encode())
 
-
-    # @asyncSlot()
+  
     def insertCartridge(self):
 
         """Send command on serial to insert cartridge"""
 
-        # await asyncio.sleep(0.1)
         txt = "INSERT\n"
         self.serial.write(txt.encode())
 
 
-    # @asyncSlot()
     def homeRobot(self):
 
         """Send command on serial to insert cartridge"""
@@ -343,13 +346,10 @@ class TheaQC(Experiment):
         txt = "HOME\n"
         self.serial.write(txt.encode())
         
-
   
     async def waitOnRobot(self):
 
         """Reusable block of code to log timeout for Ack"""
-        
-        
         
         logger.info(f"last message : {self.lastMessage}")
         self.lastMessage = " "      #  clear previous ACK if any
@@ -360,8 +360,7 @@ class TheaQC(Experiment):
         except asyncio.exceptions.TimeoutError:
             logger.error(f"[ERROR]: ACK not received")
             logger.info(f"Quitting . . .")
-
-            #self.cancelTasks()
+            self.cancelTasks()
 
 
     async def doQuickScan(self):
@@ -372,6 +371,41 @@ class TheaQC(Experiment):
         asyncio.gather(self.quickScanTask)
         while not self.quickScanTask.done():
             await asyncio.sleep(0.5)
+
+
+    async def checkForSensor(self):
+
+        """Reusable code block for verifyinf sensor"""
+
+        try:    
+            await self.doQuickScan()
+            logger.info("Quick scan completed")
+
+            if self.classification == 'Sensor':
+                self.state = 1
+            
+            if self.classification == 'Air':
+                self.state = 0
+            
+                self.insertCartridge()
+                await self.waitOnRobot()
+                await self.doQuickScan()
+                logger.info("Verification scan completed")
+
+                try:
+                    await asyncio.sleep(1)
+                    assert self.classification == "Sensor"
+                    self.state = 1
+                except AssertionError as a:
+                    self.state = 3.1
+                    logger.error(f"[ERROR] State {self.state}- Sensor not detected. Please check motion paths, cartridge holder for missing/ defective sensor")
+                    raise a
+        except asyncio.exceptions.TimeoutError:
+            logger.error(f"[ERROR]: ACK not received")
+            return
+        except asyncio.exceptions.CancelledError:
+            logger.warning(f"[WARNING]: Sensor check cancelled.")
+            return
 
 
     @asyncSlot()
@@ -387,34 +421,10 @@ class TheaQC(Experiment):
                 await self.waitOnRobot()
                 logger.info("Homing complete. . .")
 
-                
                 while not self.qcComplete:                    
                     
-                    await self.doQuickScan()
-                    logger.info("Quick scan completed")
-
-                    if self.classification == 'Sensor':
-                        self.state = 1
-                    
-                    if self.classification == 'Air':
-                        self.state = 0
-                    
-                        self.insertCartridge()
-                        await self.waitOnRobot()
-                        await self.doQuickScan()
-                        logger.info("Verification scan completed")
-
-                        try:
-                            await asyncio.sleep(1)
-                            assert self.classification == "Sensor"
-                            self.state = 1
-                        except AssertionError as a:
-                            self.state = 3.1
-                            logger.error(f"[ERROR] State {self.state}- Sensor not detected. Please check motion paths, cartridge holder for missing/ defective sensor")
-                            raise a
-                            
-
-                
+                    await self.checkForSensor()
+        
                     self.qcAvgTask = asyncio.ensure_future(self.startAveraging(self.qcNumAvgs))
                     asyncio.gather(self.qcAvgTask)
                     while not self.qcAvgTask.done():
@@ -422,7 +432,6 @@ class TheaQC(Experiment):
 
                     if self.qcAvgTask.done():
                         logger.info("Averaging check - True")
-                        
                         self.compareToStdRef()
                         self.saveAverageData(data = self.qcAvgResult, path = self.qcSaveDir, headerType = 'qc') 
                         await self.device.stop()
@@ -432,17 +441,17 @@ class TheaQC(Experiment):
                     self.sensorUpdateReady.emit()
                     self.sensorId += 1
                     self.qcResult = None
-                    
-                    
-
-
-
+            
             except Exception as e:
                 logger.error("Something went wrong")
                 raise e
+            except CancelledError:
+                logger.error("Cancelling")
 
             
-    def compareToStdRef(self):                
+    def compareToStdRef(self):    
+
+        """Compare last averaging result to the loaded standard reference. Update the qc result and update the run number"""            
 
         self.qcAvgResult = self.device.avgResult
         
@@ -456,72 +465,20 @@ class TheaQC(Experiment):
         if err > self.config['QC']['maxViolations']:                  # <<<<<<<<< QC criterion
             print("QC FAIL")
             self.qcResult = "FAIL"
-            resonanceMin = self.findResonanceMinima(self.qcAvgFFT)
-            self.qcResultsList.append({'sensorId':self.sensorId,
-                                        'waferId': self.waferId,
-                                        'qcResult': self.qcResult,
-                                        'resonance': resonanceMin})
+            
         else:
             print("QC PASS")
             self.qcResult = "PASS"
 
+        resonanceMin = self.findResonanceMinima(self.qcAvgFFT)
+        self.qcResultsList.append({'sensorId':self.sensorId,
+                                        'waferId': self.waferId,
+                                        'qcResult': self.qcResult,
+                                        'resonance': resonanceMin})
+
         self.qcUpdateReady.emit()
         self.qcRunNum += 1
         
-       
-            
-            
-            
-            
-#                 self.qcRunning = False
-#                 return
-            
-#             await asyncio.sleep(1)            # test without sleep            
-#             self.classifyTDS()
-#             await self.startAveraging(self.qcNumAvgs)
-
-           
-#             qcAvgResult = self.device.avgResult
-#             self.device.setDesiredAverages(1)
-            # _ , self.qcAvgFFT = self.calculateFFT(self.timeAxis, qcAvgResult['amplitude'][0])
-            # diff =  20*np.log(np.abs(self.stdRefFFT)) - 20*np.log(np.abs(self.qcAvgFFT[self.start_idx:self.end_idx]))
-            # err = 0
-            
-            # for j in diff:
-            #     if abs(j) > self.config['QC']['allowedErrordB']:                # <<<<<<<<< QC criterion
-            #         err+=1
-            # if err > self.config['QC']['maxViolations']:                  # <<<<<<<<< QC criterion
-            #     print("QC FAIL")
-            #     self.qcResult = "FAIL"
-            #     resonanceMin = self.findResonanceMinima()
-            #     self.qcResultsList.append({'datetime': currentDatetime.strftime("%d-%m-%y %H:%M:%S"),
-            #                                 'sensorId':self.sensorId,
-            #                                 'waferId': self.waferId,
-            #                                 'qcResult': self.qcResult,
-            #                                 'resonance': resonanceMin})
-            # else:
-            #     print("QC PASS")
-            #     self.qcResult = "PASS"
-            # self.qcRunNum += 1
-            # self.qcUpdateReady.emit()
-#             rawExportData = np.vstack([self.timeAxis,  qcAvgResult['amplitude'][0]]).T
-
-            
-#             header = f"""THEA QC - RAM Group GmbH, powered by Menlo Systems\nProgram Version 1.05\nAverage over {self.numAvgs} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}
-# User time axis shift: {self.config['TScan']['begin']*-1}, QC Parameters: {self.qcParams}
-# Time [ps]              THz Signal [mV]"""
-#             base_name = f"""{currentDatetime.strftime("%d%m%yT%H%M%S")}_WID_{self.waferId}_SN_{self.sensorId}_{self.qcResult}_Reference"""
-#             saveWaferDir = os.path.join(self.qcSaveDir, str(datetime.now().date()) , self.waferId)
-#             if not os.path.isdir(saveWaferDir):
-#                 os.makedirs(os.path.join(saveWaferDir))
-#                 data_file = os.path.join(saveWaferDir.replace("/","\\"), f'{base_name}.txt')
-#                 np.savetxt(data_file, rawExportData, header = header, delimiter = '\t' )  
-#             else:                        
-#                 data_file = os.path.join(saveWaferDir.replace("/","\\"), f'{base_name}.txt')
-#                 np.savetxt(data_file, rawExportData, header = header, delimiter = '\t' )  
-#             # self.qcResult = None
-
-     
 
     @asyncSlot()
     async def startQC(self):
@@ -530,7 +487,9 @@ class TheaQC(Experiment):
 
         self.qcRunning = True
         self.qcComplete = False
-        
+        self.qcResultsList = []
+        startTime = datetime.now()
+        self.sessionName = str(datetime.now()).split('.')[0].replace(' ','').replace(':','-')
         ### sensor must be inserted first . Need to read ACK to proceed
         
 
@@ -542,7 +501,8 @@ class TheaQC(Experiment):
             _, self._stdRefFFT = self.calculateFFT(self.stdRef.time[0], self.stdRefAmp)
             self.stdRefFFT = self._stdRefFFT[self.start_idx: self.end_idx]
             self.fRange = self.stdRef.freq[0][self.start_idx: self.end_idx]
-            self.doQC()
+            self.qcLoopTask = asyncio.ensure_future(self.doQC())
+            asyncio.gather(self.qcLoopTask)
         else:
             logger.error("[ERROR]: Config error > Standard reference is not loaded correctly.")
         await asyncio.sleep(0.01)
@@ -556,6 +516,7 @@ class TheaQC(Experiment):
         self.qcRunning = False
         self.qcComplete = True
         self.stopUpstream.emit()
+        self.generateReport()
            
 
     @asyncSlot()
@@ -576,7 +537,7 @@ class TheaQC(Experiment):
         self.freq, self.FFT = self.calculateFFT(self.timeAxis,self.pulseAmp)
         self.avgProgVal = self.device.scanControl.currentAverages/\
                                  self.device.scanControl.desiredAverages*100
-        #self.checkNextSensor()
+        
         await asyncio.sleep(0.1)
             
 
@@ -594,19 +555,8 @@ class TheaQC(Experiment):
     async def measureStandardRef(self):
 
         """Measure standard reference for QC and update config file."""
-   
-        await self.quickScan()
-        if self.classification == 'Air':
-            self.lastMessage = " "      #  clear previous ACK if any
-            await self.insertCartridge()
-            logger.info(f"last message : {self.lastMessage}")
-            try:
-                task = asyncio.create_task(self.waitForAck())
-                await asyncio.wait_for(task, timeout = self.timeout)
-
-            except asyncio.exceptions.TimeoutError:
-                logger.error(f"[ERROR]: ACK not received")
-                return
+        
+        await self.checkForSensor()
             
         await asyncio.sleep(1)            # test without sleep            
         await self.classifyTDS()
@@ -616,16 +566,13 @@ class TheaQC(Experiment):
             self.saveAverageData(data = self.device.avgResult, path = self.stdRefDir, headerType = 'stdRef')
             self.stopUpstream.emit()
         self.config['QC']['stdRefFileName'] = self.lastFile
-        #print(self.lastFile)
-
+        
         with open(self.config_file, 'w') as f:
-            # print(self.config)
             f.write(yaml.dump(self.config, default_flow_style = False))
             print(self.config)
             f.close()
             self.loadConfig()
             self.loadQcConfig()
-              
             logger.info(f"Standard reference updated: {self.config['QC']['stdRefFileName']}")            
 
 
@@ -665,12 +612,19 @@ class TheaQC(Experiment):
                 self.device.avgTask.cancel()
                 logger.info("Averaging cancelled")
             if self.qcAvgTask is not None:
-                logger.info("QC cancelled")
+                logger.info("Cancelling qc averaging")
                 self.qcAvgTask.cancel()   
                 self.qcRunning = False        
             if self.quickScanTask is not None:
                 logger.info("Cancelling quickscan task")
-                self.quickScanTask.cancel()     
+                self.quickScanTask.cancel() 
+            if self.ackTask is not None:
+                logger.info("Cancelling Ack timer")
+                self.ackTask.cancel()   
+            if self.qcLoopTask is not None:
+                logger.info("Cancelling QC Loop Task")
+                self.qcLoopTask.cancel()                     
+                
         except CancelledError:
             logger.warning("Shutting down tasks")
 
