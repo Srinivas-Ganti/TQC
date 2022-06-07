@@ -1,0 +1,23 @@
+
+Export:
+  filename: data.dat
+  saveDir: C:\Users\TeraSmart-PC\Documents\TheaPython\TQC\polSweepData
+Spectrometer:
+  name: TERASMART
+  systemNum: 9
+TScan:
+  begin: -271
+  numAvgs: 10
+  window: 400    
+PolSweep:
+  frames: 10 # number of scans
+  angle1: 90 # anticlockwise degrees from the upright cartridge position.
+  angle2: -90 # clockwise degrees from the upright cartridge position
+  numDisplayDataSeries: 5
+Robots:
+  baudrate: 115200
+  port: COM5
+  timeout: 45
+  angle1Lim: 120
+  angle2Lim: -120
+  angRes: 0.2
