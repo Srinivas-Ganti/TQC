@@ -9,7 +9,7 @@ String Command; // String command to rotate the holder
 bool isData; 
 bool dir;
 bool homed = false; //initially assume the motor is not homed
-const double offset = 87.5; // angle offset to align cartridge back from home limit.
+const double offset = 95; // angle offset to align cartridge back from home limit.
 
 float angle; // angle requested by user
 double pos;  //current position

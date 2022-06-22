@@ -7,6 +7,7 @@ controllerDir = os.path.join(baseDirC, "Controller")
 MenloAPIDir = os.path.join(controllerDir, "Menlo")
 logDir = os.path.join(baseDirC, "Logs")
 
+sys.path.append(baseDirC)
 sys.path.append(controllerDir)
 sys.path.append(MenloAPIDir)
 sys.path.append(logDir)
@@ -28,8 +29,6 @@ file_handler = logging.FileHandler(os.path.join(logDir, 'controller.log'))
 file_handler.setFormatter(formatter)
 
 logger.addHandler(file_handler)
-
-
 
 
 class Device(QWidget):
@@ -175,7 +174,7 @@ class Device(QWidget):
             :type data: dict
             :param data: data dictionary with THz pulse information
         """
-        asyncio.sleep(0.01)
+        await asyncio.sleep(0.01)
         if self.scanControl.currentAverages > 0:
             self.pulseData = data
         print(f"Averaging: {self.scanControl.currentAverages}/{self.scanControl.desiredAverages}\r")
@@ -189,18 +188,22 @@ class Device(QWidget):
     async def doAvgTask(self):
 
         """Perform averaging task and emit final result as signal"""
-        
-        if self.avgTask is not None:
-            self.resetAveraging()
-            if not self.isAcquiring:
-                await self.start()       
-                await asyncio.sleep(2)     
-            while not self.isAveragingDone():
-                await asyncio.sleep(0.1)
-            if self.isAveragingDone():
-                avgData = self.pulseData
-                self.dataUpdateReady.emit(avgData)
-  
+
+        try:    
+            if self.avgTask is not None:
+                self.resetAveraging()
+                if not self.isAcquiring:
+                    await self.start()       
+                    await asyncio.sleep(2)     
+                while not self.isAveragingDone():
+                    await asyncio.sleep(0.1)
+                if self.isAveragingDone():
+                    avgData = self.pulseData
+                    self.dataUpdateReady.emit(avgData)
+        except asyncio.exceptions.CancelledError as c:
+            print("Really cancelling now")
+            raise c
+
 
     @asyncSlot()    
     async def start(self):
