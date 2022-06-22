@@ -9,6 +9,7 @@ Export:
   filename: data.dat
   saveDir: C:\Users\TeraSmart-PC\Documents\TheaPython\TQC\qcData
 QC:
+  ReportsDir: C:\Users\TeraSmart-PC\Documents\TheaPython\TQC\Reports
   allowedErrordB: 1.25
   chipsPerWafer: 10000
   handlingTime: 2s
@@ -19,7 +20,7 @@ QC:
   qcSaveDir: C:\Users\TeraSmart-PC\Documents\TheaPython\TQC\qcData
   sensorId: 1
   stdRefDir: C:\Users\TeraSmart-PC\Documents\TheaPython\TQC\Resources\StandardReferences
-  stdRefFileName: 2022-04-15\22-04-15T123926_T_NIL_RH_NIL_PID_NIL_SN_1_None_Reference.txt
+  stdRefFileName: 2022-04-20\22-04-20T144328_T_NIL_RH_NIL_PID_NIL_SN_1_None_Reference.txt
   upperFreqBound: 0.9
   waferId: AA0001
 Robots:

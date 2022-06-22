@@ -13,11 +13,12 @@ sys.path.append(baseDir)
 
 
 from Model.experiment import *
+from Model.QCSM import *
 from Resources import ur
 from MenloLoader import MenloLoader
 from PyQt5 import QtSerialPort
 from scipy.signal import find_peaks
-from asyncTimer import Timer
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -149,8 +150,8 @@ class TheaQC(Experiment):
         self.qcAvgTask = None                       # QC averaging task
         self.qcLoopTask = None                      # QC test loop
         self.sessionName = None                     # Name of report
-
-
+        
+        
     def loadDcBkg(self):
 
         """
@@ -282,7 +283,7 @@ class TheaQC(Experiment):
         
         self.device.avgTask = None         
         await self.classifyTDS()
-        self.device.stop()
+        await self.device.stop()
         
         
 
@@ -321,6 +322,11 @@ class TheaQC(Experiment):
             raise e
 
 ##################################### AsyncSlot coroutines #######################################
+    
+    def eventFilter(self, msg):
+        pass
+
+
 
     def ejectCartridge(self):
 
@@ -397,11 +403,12 @@ class TheaQC(Experiment):
                     assert self.classification == "Sensor"
                     self.state = 1
                 except AssertionError as a:
-                    self.state = 3.1
+                    self.state = 3.2
                     logger.error(f"[ERROR] State {self.state}- Sensor not detected. Please check motion paths, cartridge holder for missing/ defective sensor")
                     raise a
         except asyncio.exceptions.TimeoutError:
             logger.error(f"[ERROR]: ACK not received")
+            self.state = 3.1
             return
         except asyncio.exceptions.CancelledError:
             logger.warning(f"[WARNING]: Sensor check cancelled.")
@@ -423,6 +430,7 @@ class TheaQC(Experiment):
 
                 while not self.qcComplete:                    
                     
+                    self.qcUpdateReady.emit()
                     await self.checkForSensor()
         
                     self.qcAvgTask = asyncio.ensure_future(self.startAveraging(self.qcNumAvgs))
@@ -517,6 +525,7 @@ class TheaQC(Experiment):
         self.qcComplete = True
         self.stopUpstream.emit()
         self.generateReport()
+        await asyncio.sleep(3)
            
 
     @asyncSlot()
@@ -557,8 +566,6 @@ class TheaQC(Experiment):
         """Measure standard reference for QC and update config file."""
         
         await self.checkForSensor()
-            
-        await asyncio.sleep(1)            # test without sleep            
         await self.classifyTDS()
         await self.startAveraging(self.qcNumAvgs)
 
@@ -582,23 +589,27 @@ class TheaQC(Experiment):
         """
             AsyncSlot coroutine to initiate the averaging task. Buttons are partially disabled during the process. 
         """                
-        
-        if numAvgs == None:            
-            self.device.setDesiredAverages(self.numAvgs)
-            logger.info(f"default averaginig: {self.numAvgs}")
-        else:
-            self.device.setDesiredAverages(numAvgs)
-            logger.info(f"special averaginig: {numAvgs}")
-                
-        await asyncio.sleep(1)
-        self.device.keepRunning = True
-        self.device.avgTask = asyncio.ensure_future(self.device.doAvgTask())
-        await asyncio.gather(self.device.avgTask)
-        while not self.device.isAveragingDone():
+
+        try:    
+            if numAvgs == None:            
+                self.device.setDesiredAverages(self.numAvgs)
+                logger.info(f"default averaginig: {self.numAvgs}")
+            else:
+                self.device.setDesiredAverages(numAvgs)
+                logger.info(f"special averaginig: {numAvgs}")
+                    
             await asyncio.sleep(1)
-        if self.device.isAveragingDone():
-            logger.info(f"Scan completed: {self.device.scanControl.currentAverages}/{self.device.scanControl.desiredAverages}")
-            
+            self.device.keepRunning = True
+            self.device.avgTask = asyncio.ensure_future(self.device.doAvgTask())
+            await asyncio.gather(self.device.avgTask)
+            while not self.device.isAveragingDone():
+                await asyncio.sleep(1)
+            if self.device.isAveragingDone():
+                logger.info(f"Scan completed: {self.device.scanControl.currentAverages}/{self.device.scanControl.desiredAverages}")
+        
+        except asyncio.CancelledError:
+            logger.warning("Averaging interrupted")        
+
 
     @asyncSlot()
     async def cancelTasks(self):
@@ -608,24 +619,43 @@ class TheaQC(Experiment):
         """
         logger.warning("cancelling tasks")
         try:
-            if self.device.avgTask is not None:
-                self.device.avgTask.cancel()
-                logger.info("Averaging cancelled")
+                
             if self.qcAvgTask is not None:
                 logger.info("Cancelling qc averaging")
                 self.qcAvgTask.cancel()   
+                self.qcAvgTask.cancelled()   
                 self.qcRunning = False        
-            if self.quickScanTask is not None:
-                logger.info("Cancelling quickscan task")
-                self.quickScanTask.cancel() 
-            if self.ackTask is not None:
-                logger.info("Cancelling Ack timer")
-                self.ackTask.cancel()   
+            
             if self.qcLoopTask is not None:
                 logger.info("Cancelling QC Loop Task")
                 self.qcLoopTask.cancel()                     
+                self.qcLoopTask.cancelled()                     
+            
+            if self.device.avgTask is not None:
+                self.device.avgTask.cancel()
+                self.device.avgTask.cancelled()
+                logger.info("Averaging cancelled")
+
+            if self.qcAvgTask is not None:
+                logger.info("Cancelling qc averaging")
+                self.qcAvgTask.cancel()   
+                self.qcAvgTask.cancelled()   
+                self.qcRunning = False        
+
+            if self.quickScanTask is not None:
+                logger.info("Cancelling quickscan task")
+                self.quickScanTask.cancel() 
+                self.quickScanTask.cancelled() 
                 
-        except CancelledError:
+            if self.ackTask is not None:
+                logger.info("Cancelling Ack timer")
+                self.ackTask.cancel()   
+                self.ackTask.cancelled()
+
+            await self.device.stop()
+            await asyncio.sleep(2)
+
+        except asyncio.CancelledError:
             logger.warning("Shutting down tasks")
 
 

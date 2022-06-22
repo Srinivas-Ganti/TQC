@@ -2,7 +2,7 @@ import pandas as pd
 import csv
 import numpy as np
 import datetime
-from scipy import signal
+from scipy import signal as sgnl
 
 
 class MenloLoader:
@@ -43,7 +43,7 @@ class MenloLoader:
         # e_time = e_time[:(self.find_nearest(e_time, self.win)[0])]                   
         # e_amp = e_amp[:(self.find_nearest(e_time, self.win)[0])]
         N = len(e_time)              
-        w = signal.tukey(N, alpha = 0.1) 
+        w = sgnl.tukey(N, alpha = 0.1) 
 
         e_amp = w*(e_amp)                                     
            

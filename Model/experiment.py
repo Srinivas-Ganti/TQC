@@ -9,8 +9,8 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from pyqtgraph import PlotWidget, graphicsItems, TextItem
 from pyqtgraph.graphicsItems.PlotDataItem import PlotDataItem, PlotCurveItem
-from scipy import signal
-
+from scipy import signal as sgnl
+import signal
 
 baseDir =  os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(baseDir)
@@ -56,10 +56,12 @@ class Experiment(QWidget):
             self.device.resetAveraging()  # Always begin with averaging buffer cleared
             self.stdRefDir = None         # path to std ref dir
             self.lastFile = None          # Full path of the last file being saved
-        except AttributeError:
+        except AttributeError as a:
             logger.error("Scan Control not found. Please ensure Menlo ScanControl is ON")
-        except FileNotFoundError:
+            raise a
+        except FileNotFoundError as f:
             logger.error("Problem loading config file, check file path")
+            raise f
         
 
 
@@ -192,7 +194,7 @@ class Experiment(QWidget):
         t_ser_len = 16384
         T = time[1]-time[0] 
         N = len(time)     
-        w = signal.tukey(N, alpha = 0.1)   
+        w = sgnl.tukey(N, alpha = 0.1)   
         amp = w*amp                                        
         pad = t_ser_len - N  
         time = np.append(time, np.zeros(pad))          

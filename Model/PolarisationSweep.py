@@ -4,10 +4,10 @@ import os
 
 from pyqtgraph.exporters import ImageExporter
 baseDir =  os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-rscDir = os.path.join(baseDir, "Resources")
-configDir = os.path.join(baseDir, "Model")  # if keeping in same dir as model
+viewDir = os.path.join(baseDir, "View")
+# configDir = os.path.join(baseDir, "Model")  # if keeping in same dir as model
 sys.path.append(baseDir)
-
+sys.path.append(viewDir)
 
 from Model.experiment import *
 from Resources import ur
@@ -354,12 +354,10 @@ class TheaPolSweep(Experiment):
                 self.rotateHolder(self.requestedAngle)
                 await self.waitOnRobot()
                 await self.getPosition()
-               
-                
+            
                 self.polSweepTask =  asyncio.ensure_future(self.newScan())
                 asyncio.gather(self.polSweepTask)
 
-                
                 while not self.polSweepTask.done():
                     await asyncio.sleep(1)
 
