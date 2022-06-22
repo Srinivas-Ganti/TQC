@@ -37,7 +37,7 @@ logger.addHandler(file_handler)
 logger.addHandler(stream_handler)
 
 
-class TqcMainWindow(QWidget):
+class TqcMainWindow(QWidget, Machine):
 
     dataUpdateReady = pyqtSignal(object)
 
@@ -48,8 +48,27 @@ class TqcMainWindow(QWidget):
         self.experiment = experiment
         self.initUI()
         self.openSerial()
+        self.machine = AsyncMachine(self.experiment, states = QCStates, transitions = transitions , initial = QCStates.OFF, auto_transitions= False)
         
     
+    def closeEvent(self, event):
+
+        quit_msg = "Are you sure you want to exit the program?"
+        reply = QMessageBox.question(self, 'THEA QC Confirm shutdown', 
+                        quit_msg, QMessageBox.Yes, QMessageBox.No)
+
+        if reply == QMessageBox.Yes:
+            
+            loop = asyncio.get_event_loop()
+            tasks = asyncio.all_tasks(loop = loop)
+            for t in tasks:
+                t.cancel()
+            asyncio.gather(*tasks, return_exceptions=True)
+        
+        else:
+            event.ignore()    
+        
+
     def openSerial(self):
         
         """Open serial port for communication with QC robot"""
@@ -73,7 +92,6 @@ class TqcMainWindow(QWidget):
         self.experiment.qcUpdateReady.connect(self.qcResult)
         self.experiment.sensorUpdateReady.connect(self.checkNextSensor)     
         self.livePlot.scene().sigMouseMoved.connect(self.mouseMoved)
-        
         
         self.btnStartAveraging.clicked.connect(self.experiment.startAveraging)
 
@@ -236,7 +254,7 @@ class TqcMainWindow(QWidget):
             logger.info("TDS Inputs accepted")
             self.experiment.device.setBegin(self.experiment.startTime)
             self.experiment.device.setEnd(self.experiment.endTime)
-            # self.btnStart.setEnabled(True)
+            
             self.btnStartAveraging.setEnabled(True)
             self.btnResetAvg.setEnabled(True)
 
@@ -395,26 +413,20 @@ class TqcMainWindow(QWidget):
         self.livePlot.setTitle("""Live QC""", color = 'g', size = "45 pt")   
         self.livePlot.showGrid(x = True, y = True)
         self.livePlot.setMouseTracking(True)
-        
         self.textbox.setReadOnly(True)
         self.progAvg.setValue(self.experiment.avgProgVal)
         
         
-
     def disableButtons(self):
 
         """
             Disable GUI buttons from user interactions.
         """
 
-        # self.btnStart.setEnabled(False)
         self.btnResetAvg.setEnabled(False)
         self.btnStartAveraging.setEnabled(False)
-        
-        # self.btnStartQC.setEnabled(False)
         self.btnFinishQC.setEnabled(False)
-        # self.btnNewStdRef.setEnabled(False)
-
+       
 
     def enableButtons(self):
 
@@ -505,8 +517,8 @@ class TqcMainWindow(QWidget):
         await asyncio.sleep(0.01)
         self.message("> [MESSAGE]: Recording new standard reference for QC . . .")
         self.btnNewStdRef.setEnabled(False)
-        # self.btnStartAveraging.clicked.emit()
         self.message(f"> [MESSAGE]: RELOADING CONFIG, updating internal reference . . . ")
+        # while not 
         
     	
     @asyncSlot()
@@ -529,10 +541,18 @@ class TqcMainWindow(QWidget):
             self.lblQcStatusIcon.setScaledContents(True)
             self.qCcurrentMsg.setText("Result: QC PASS")
             self.message(f"{self.experiment.waferId}_{self.experiment.sensorId} : {self.experiment.qcResult}")
+        
+        elif self.experiment.qcResult is None:
+
+            self.lblQcStatusIcon.setPixmap(QPixmap("Icons/arrow-circle-double.png"))
+            self.lblQcStatusIcon.setScaledContents(True)
+            self.qCcurrentMsg.setText("Result: Processing")
 
 
     @asyncSlot()
     async def classifyTDS(self):
+
+        """Update graphics with classification result"""
 
         await asyncio.sleep(0.1)
         if self.experiment.classification == "Sensor":
@@ -562,8 +582,7 @@ class TqcMainWindow(QWidget):
         await asyncio.sleep(0.1)
         
         self.enableButtons()
-        # self.btnStartQC.setEnabled(False)
-
+        
 
     @asyncSlot()
     async def startAveraging(self, data):
@@ -590,14 +609,6 @@ class TqcMainWindow(QWidget):
 
         await asyncio.sleep(0.01)
         
-        # if not self.experiment.qcRunning:
-        #     self.btnStartQC.setEnabled(True)
-        #     if self.experiment.classification == "Sensor":
-        #         self.btnNewStdRef.setEnabled(True)
-        # elif self.experiment.qcRunNum > 0:
-        #     self.btnStartQC.setEnabled(False)
-        #     self.btnNewStdRef.setEnabled(False)
-
         if self.experiment.device.isAcquiring:
             self.lEditTdsAvgs.setText(str(self.experiment.device.numAvgs))
             
@@ -623,7 +634,8 @@ class TqcMainWindow(QWidget):
 
 #******************************************************************************************
 if __name__ == '__main__':
-    
+
+  
     
     app = QApplication(sys.argv)    
     loop = QEventLoop(app)
@@ -634,6 +646,7 @@ if __name__ == '__main__':
     win.show()
 
     with loop:
+
         sys.exit(loop.run_forever())
         
 

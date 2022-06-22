@@ -426,8 +426,8 @@ class PolSweepMainWindow(QMainWindow):
         self.top = 40      
         self.labelValue = None         #LabelItem to display timelapse frames on plot
         self.setGeometry(self.left, self.top, self.width, self.height)   
-        self.livePlot.setXRange(0,3.5, padding = 0)
-        self.livePlot.setYRange(-250, -105, padding = 0)
+        self.livePlot.setXRange(0.2,2.2, padding = 0)
+        self.livePlot.setYRange(-200, -100, padding = 0)
         self.colorLivePulse = (66,155,184, 145)
         self.colorlivePulseBackground = (66,155,184,145)
         self.livePlotLineWidth = 1
@@ -447,6 +447,7 @@ class PolSweepMainWindow(QMainWindow):
         self.disableButtons()
         self.initAttribs()
         self.connectEvents()
+
         self.validateDefaultInputs()
         self.progAvg.setValue(self.experiment.avgProgVal)
         self.progPolSweep.setValue(self.experiment.polSweepProgVal)
