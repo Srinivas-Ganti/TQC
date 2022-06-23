@@ -20,8 +20,8 @@ class PolDataViewerWindow(QMainWindow):
         self.initUI()
         self.phi = None
         self.config_file = configFile
-        self.loadConfig()
-        self.loadData()
+        #self.loadConfig()
+        #self.loadData()
 
     
     def loadConfig(self):
@@ -44,6 +44,7 @@ class PolDataViewerWindow(QMainWindow):
         self.setWindowTitle("THEA PolDataViewer")
         self.initAttribs()
         self.connectEvents()
+        self.setAcceptDrops(True)
         self.livePlot.setLabel('left', 'Transmission Intensity (dB)')
         self.livePlot.setLabel('bottom', 'Frequency (THz)')
         self.livePlot.setTitle("""Transmission FFT""", color = 'g', size = "45 pt")   
@@ -134,6 +135,8 @@ class PolDataViewerWindow(QMainWindow):
             x = float("{0:.3f}".format(mousePoint.x()))
             y = float("{0:.3f}".format(mousePoint.y()))
             self.xyLabel.setText(f"last cursor position: {x, y}")
+
+
 
 if __name__ =="__main__":
     app = QApplication(sys.argv)
