@@ -91,6 +91,7 @@ class PolSweepMainWindow(QMainWindow):
         self.experiment.device.dataUpdateReady.connect(self.experiment.device.done)
         self.experiment.polSweepFinished.connect(self.enableAnimation)
         self.experiment.polSweepFinished.connect(self.makeGIF)
+        self.lEditMaterial.editingFinished.connect(self.validateMaterial)
         self.btnStart.clicked.connect(self.experiment.polSweepStart)
         self.btnStart.clicked.connect(self.disableLEdit)
         self.btnStop.clicked.connect(self.experiment.device.stop) 
@@ -107,6 +108,19 @@ class PolSweepMainWindow(QMainWindow):
         self.lEditTdsAvgs.textChanged.connect(self.avgsChanged)
         self.livePlot.scene().sigMouseMoved.connect(self.mouseMoved)
 
+
+    def validateMaterial(self):
+
+        if self.lEditMaterial.text() is not None and self.lEditMaterial.text() != "":
+            str = self.lEditMaterial.text()
+            filteredStr = ''.join(e for e in str if e.isalnum())
+            self.lEditMaterial.setText(filteredStr)
+            self.experiment.scanName = filteredStr
+            print(f"Material accepted: {self.experiment.scanName}")
+        else:
+            self.lEditMaterial.setText("Data")
+            self.experiment.scanName = "Data"
+            print("Using default name - data")
 
     @asyncSlot()
     async def receive(self):
@@ -434,7 +448,8 @@ class PolSweepMainWindow(QMainWindow):
         self.averagePlotLineWidth = 1.5
         self.plotDataContainer = {'livePulseFft': None}       # Dictionary for plot items
         self.lEditTdsEnd.setReadOnly(True)
-        
+        self.scanName = None
+
 
     def initUI(self):
 
