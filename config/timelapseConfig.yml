@@ -15,4 +15,9 @@ Timelapse:
   maxStorage: 2GB # max storage for timelapse session - kB, MB, GB
   _filesize : 606 kB # typical filesize - private!
   numDisplayDataSeries: 5
-
+TemperatureSensor:
+  port: COM6
+  baudrate: 115200
+  timeout: 2
+  scrollLength: 10
+  samplingRate: 0.75 
