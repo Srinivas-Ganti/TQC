@@ -333,7 +333,7 @@
      <rect>
       <x>750</x>
       <y>380</y>
-      <width>200</width>
+      <width>202</width>
       <height>25</height>
      </rect>
     </property>
@@ -341,14 +341,14 @@
      <item>
       <widget class="QPushButton" name="btnStartTemp">
        <property name="text">
-        <string>Start Temperature</string>
+        <string>Start Observation</string>
        </property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="btnStopTemp">
        <property name="text">
-        <string>Stop Temperature</string>
+        <string>Stop Observation</string>
        </property>
       </widget>
      </item>
