@@ -4,13 +4,11 @@
 #define STEPPER_PIN_3 11
 #define STEPPER_PIN_4 12
 #define limSwitch 6
-
-String Command; // String command to rotate the holder
 bool isData; 
 bool dir;
 bool homed = false; //initially assume the motor is not homed
-const double offset = 95; // angle offset to align cartridge back from home limit.
-
+const double offset = 114; //angle offset to align cartridge back from home limit.
+String Command;
 float angle; // angle requested by user
 double pos;  //current position
 double target; // variable requested angle
@@ -59,6 +57,7 @@ void loop() {
    Command = "";
   }
   delay(20); 
+  
 }
 
 
@@ -66,12 +65,12 @@ void home(){
   Serial.print("Homing cartridge . . . ");
   for (int i = 0; i < 300000 && !digitalRead(limSwitch); i++) {
     OneStep(false);
-    //Serial.println(digitalRead(limSwitch));
+    Serial.println(digitalRead(limSwitch));
     delayMicroseconds(homingDelay);
   }
   for (int i = 0; i < 300000 && digitalRead(limSwitch); i++) {
     OneStep(true);
-    //Serial.println(digitalRead(limSwitch));
+    Serial.println(digitalRead(limSwitch));
     delayMicroseconds(homingDelay);
   }
   homed = true;
