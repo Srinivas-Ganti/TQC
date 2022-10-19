@@ -1,9 +1,19 @@
+#include "Adafruit_MAX31855.h"
 
+#define thermoDO 4
+#define thermoCS 8
+#define thermoCLK 7
 #define STEPPER_PIN_1 9
 #define STEPPER_PIN_2 10
 #define STEPPER_PIN_3 11
 #define STEPPER_PIN_4 12
 #define limSwitch 6
+
+double temperature;
+double errorCompensation = -24.5;
+
+Adafruit_MAX31855 thermocouple(thermoCLK, thermoCS, thermoDO);
+
 bool isData; 
 bool dir;
 bool homed = false; //initially assume the motor is not homed
@@ -21,13 +31,20 @@ const int stepsPerDegree = 28;
 
 
 void setup() {
+pinMode(thermoCLK, OUTPUT);
+pinMode(thermoCS, OUTPUT);
+pinMode(thermoDO, INPUT);
 pinMode(STEPPER_PIN_1, OUTPUT);
 pinMode(STEPPER_PIN_2, OUTPUT);
 pinMode(STEPPER_PIN_3, OUTPUT);
 pinMode(STEPPER_PIN_4, OUTPUT);
 pinMode(limSwitch, INPUT);
+
 Serial.begin(115200);
 while (!Serial);
+digitalWrite(thermoCS, LOW);
+delay(500);
+Serial.println("MAX31855 probe ready");
 Serial.println("Polarisation sweep controller: READY");
 Serial.print("Enter rotation in degrees: rot+45, rot-45");
 }
@@ -50,7 +67,10 @@ void loop() {
       else if(Command.startsWith("rot")){
         rotate(Command);
         }
-          
+      else if (Command.startsWith("readTemp")) {
+      readTemperature();
+       } 
+       
       else if(Command.startsWith("pos")){
         position();
         }    
@@ -59,6 +79,14 @@ void loop() {
   delay(20); 
   
 }
+
+void readTemperature(){
+  temperature = thermocouple.readCelsius() + errorCompensation;
+  Serial.print(temperature);
+  Serial.print(" deg C\n");
+  Serial.println("");
+  Serial.print("ACK\n");
+  }
 
 
 void home(){
