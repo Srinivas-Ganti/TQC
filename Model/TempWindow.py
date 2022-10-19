@@ -218,8 +218,8 @@ class TempTimelapseWindow(QMainWindow):
             self.xmin = 1
             self.xmax = self.experiment.config['TemperatureSensor']['scrollLength'] 
             self.livePlot_2.setXRange(self.xmin, self.xmax)
-            self.experiment.time = np.linspace(1,self.experiment.config['TemperatureSensor']['samplingRate'],
-                                               self.experiment.config['TemperatureSensor']['samplingRate'])
+            self.experiment.time = np.linspace(1,self.experiment.config['TemperatureSensor']['scrollLength'],
+                                               self.experiment.config['TemperatureSensor']['scrollLength'])
         except asyncio.exceptions.CancelledError:
             print("Cancelled Observation")
 
