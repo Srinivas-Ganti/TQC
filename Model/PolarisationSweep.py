@@ -147,7 +147,7 @@ class TheaPolSweep(Experiment):
         self.GIFSourceNames = []                   # names of files to make a GIF out of
         self.timeout = None
         self.ackTask = None                         # wait for ack with timeout
-
+        self.scanName = None
 
     def findResonanceMinima(self,data):
 
@@ -226,7 +226,7 @@ class TheaPolSweep(Experiment):
             header = f"""THEA Phi Scan - RAM Group GmbH, powered by Menlo Systems\nProgram Version 0.2\nAverage over {self.numAvgs} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}
     User time axis shift: {self.config['TScan']['begin']*-1}, Phi: {self.actualAngle:03f}
     Time [ps]              THz Signal [mV]"""
-            base_name = f"""{currentDatetime.strftime("%d%m%yT%H%M%S")}_data{self.numFramesDone+1:04d}"""
+            base_name = f"""{currentDatetime.strftime("%d%m%yT%H%M%S")}_{self.scanName}_data{self.numFramesDone+1:04d}"""
             exportPath = os.path.join(self.exportPath, base_name)
             data_file = os.path.join(exportPath.replace("/","\\") +'.txt')
             print(f"EXPORTED: {data_file}")
@@ -377,6 +377,9 @@ class TheaPolSweep(Experiment):
             self.polSweepFinished.emit()
             await asyncio.sleep(1)
             self.goHome()
+            df = self.results 
+            df.to_pickle(f"{self.scanName}_{self.angle1}_{self.angle2}_{self.numRequestedFrames}.pkl")
+            print("SCAN COMPLETED AND DATAFRAME EXPORTED")
 
 
         except asyncio.exceptions.CancelledError:
