@@ -20,6 +20,7 @@ class PolDataViewerWindow(QMainWindow):
         self.initUI()
         self.phi = None
         self.config_file = configFile
+        self.scanName = None
         #self.loadConfig()
         #self.loadData()
 
@@ -35,7 +36,6 @@ class PolDataViewerWindow(QMainWindow):
 
         self.config = data
         self.configLoaded = True
-
 
 
     def initUI(self):
@@ -55,6 +55,7 @@ class PolDataViewerWindow(QMainWindow):
         self.exporter = ImageExporter(self.livePlot.scene())   # Exporter for creating plot images
         self.exporter.parameters()['width'] = 500
 
+
     def initAttribs(self):
 
         self.height = 500
@@ -71,14 +72,18 @@ class PolDataViewerWindow(QMainWindow):
         self.averagePlotLineWidth = 1.5
         self.plotDataContainer = {f'Data1': None}       # Dictionary for plot items
 
+
     def connectEvents(self):
         self.livePlot.scene().sigMouseMoved.connect(self.mouseMoved)
         self.lEditPhi.editingFinished.connect(self.validateEditPhi)
     
+
     def loadData(self):
 
         self.sampleDF = pd.read_pickle(self.config['Data']['Sample'])
         self.referenceDF = pd.read_pickle(self.config['Data']['Reference'])
+
+
 
     def validateEditPhi(self):
 
@@ -98,7 +103,6 @@ class PolDataViewerWindow(QMainWindow):
             
             self.phi =0
             self.lEditPhi.setText(str(self.phi))
-
 
 
     def plot(self, x, y):
@@ -135,7 +139,6 @@ class PolDataViewerWindow(QMainWindow):
             x = float("{0:.3f}".format(mousePoint.x()))
             y = float("{0:.3f}".format(mousePoint.y()))
             self.xyLabel.setText(f"last cursor position: {x, y}")
-
 
 
 if __name__ =="__main__":
