@@ -1,23 +1,17 @@
 import sys
 import os
-
-
 from numpy import double
-
 
 baseDir =  os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 modelDir = os.path.join(baseDir, "Model")
 viewDir = os.path.join(baseDir, "View")
 uiDir = os.path.join(viewDir, "Designer")
 configDir = os.path.join(viewDir, "config")
-
 sys.path.append(baseDir)
 sys.path.append(modelDir)
 sys.path.append(viewDir)
 sys.path.append(configDir)
 sys.path.append(uiDir)
-
-from Model.TemperatureSensor import *
 
 from Model.theaTimelapse import *
 from Model import ur
@@ -75,7 +69,9 @@ class TimelapseMainWindow(QMainWindow):
 
         super().__init__()
         self.experiment = experiment
+        self.experiment.initTemperatureSensor(self.experiment.loop, self.experiment.config_file)
         self.initUI()
+        self.btnStartTemp.setEnabled(True) # initially enable temperature obs button
         self.openSerial()
         
     
@@ -94,20 +90,21 @@ class TimelapseMainWindow(QMainWindow):
         self.experiment.timelapseFinished.connect(self.makeGIF)
         self.btnStart.clicked.connect(self.experiment.timelapseStart)
         self.btnStart.clicked.connect(self.disableLEdit)
+        self.btnStart.clicked.connect(self.startObs)
         self.btnStop.clicked.connect(self.experiment.device.stop) 
         self.btnStop.clicked.connect(self.stop) 
+        self.btnStop.clicked.connect(self.stopObs) 
         self.btnStop.clicked.connect(self.experiment.cancelTasks)
         self.btnAnimateResult.clicked.connect(self.animateGIF)
+        self.lEditMaterial.editingFinished.connect(self.validateMaterial)
         self.lEditTdsStart.editingFinished.connect(self.validateEditStart)
-        
         self.lEditTdsAvgs.editingFinished.connect(self.validateEditAverages)
-
         self.lEditFrames.editingFinished.connect(self.validateEditFrames)
         self.lEditInterval.editingFinished.connect(self.validateInterval)
         self.lEditTdsAvgs.textChanged.connect(self.avgsChanged)
         self.livePlot.scene().sigMouseMoved.connect(self.mouseMoved)
-        self.tempSensorModel.serial.readyRead.connect(self.receive)
-        self.tempSensorModel.nextScan.connect(self.plotTemp)
+        self.experiment.tempSensorModel.serial.readyRead.connect(self.receive)
+        self.experiment.tempSensorModel.nextScan.connect(self.plotTemp)
         self.livePlot_2.scene().sigMouseMoved.connect(self.mouseMoved2)
         self.btnStartTemp.clicked.connect(self.startObs)
         self.btnStopTemp.clicked.connect(self.stopObs)
@@ -116,7 +113,7 @@ class TimelapseMainWindow(QMainWindow):
     def mouseMoved2(self, evt):
 
         """
-            Track mouse movement on data plot in plot units (arb.dB vs THz)
+            Track mouse movement on data plot in plot units (deg C vs sec)
 
             :type evt: pyqtSignal 
             :param evt: Emitted when the mouse cursor moves over the scene. Contains scene cooridinates of the mouse cursor.
@@ -133,51 +130,52 @@ class TimelapseMainWindow(QMainWindow):
    
     def plotTemp(self, line):
 
-        """Plot temperature
+        """
+        Plot temperature vs time
         """
 
         if "deg C" in line:
 
-            self.tempSensorModel.ctr += 1
+            self.experiment.tempSensorModel.ctr += 1
             temp = line.split("deg")[0]
             self.lblTempBig.setText(f"Cold finger Temp: {temp} C")  
 
             def correctData():
-                self.tempSensorModel.temperatures = np.append(self.tempSensorModel.temperatures, double(line.split("deg")[0]))
-                self.tempSensorModel.temperatures = np.roll(self.tempSensorModel.temperatures, 1)
-                self.tempSensorModel.temperatures = np.delete(self.tempSensorModel.temperatures, -1)
-                flipped = np.flip(self.tempSensorModel.temperatures)
+                self.experiment.tempSensorModel.temperatures = np.append(self.experiment.tempSensorModel.temperatures,
+                                                                         double(line.split("deg")[0]))
+                self.experiment.tempSensorModel.temperatures = np.roll(self.experiment.tempSensorModel.temperatures, 1)
+                self.experiment.tempSensorModel.temperatures = np.delete(self.experiment.tempSensorModel.temperatures, -1)
+                flipped = np.flip(self.experiment.tempSensorModel.temperatures)
                 return flipped
                                 
-            if self.tempSensorModel.ctr != self.tempSensorModel.config['TemperatureSensor']['scrollLength']:
-                nanidx = self.tempSensorModel.ctr
+            if self.experiment.tempSensorModel.ctr != self.experiment.tempSensorModel.config['TemperatureSensor']['scrollLength']:
+                nanidx = self.experiment.tempSensorModel.ctr
                 flipped = correctData()
                 self.data = np.append(flipped[len(flipped)-nanidx:], flipped[:len(flipped)-nanidx])      
             
             else:
-                self.tempSensorModel.ctr = 1
-                self.tempSensorModel.epoch+=1
-                self.tempSensorModel.clearData()
-                self.xmin = self.xmin + self.tempSensorModel.config['TemperatureSensor']['scrollLength']
-                self.xmax = self.xmax + self.tempSensorModel.config['TemperatureSensor']['scrollLength']
-                self.tempSensorModel.time = np.linspace(self.xmin,self.xmax,self.tempSensorModel.config['TemperatureSensor']['scrollLength'])
+                self.experiment.tempSensorModel.ctr = 1
+                self.experiment.tempSensorModel.epoch+=1
+                self.experiment.tempSensorModel.clearData()
+                self.xmin = self.xmin + self.experiment.tempSensorModel.config['TemperatureSensor']['scrollLength']
+                self.xmax = self.xmax + self.experiment.tempSensorModel.config['TemperatureSensor']['scrollLength']
+                self.experiment.tempSensorModel.time = np.linspace(self.xmin,self.xmax,
+                                                                   self.experiment.tempSensorModel.config['TemperatureSensor']['scrollLength'])
                 self.livePlot_2.setXRange(self.xmin, self.xmax)
-                
-
-                
                 flipped = correctData()
-                
-                nanidx =  self.tempSensorModel.ctr
-                self.data = self.tempSensorModel.temperatures
-                print(self.data)
-                
-                
-            self.plotT.curve.setData(self.tempSensorModel.time,self.data)
+                nanidx =  self.experiment.tempSensorModel.ctr
+                self.data = self.experiment.tempSensorModel.temperatures
+           
+            self.experiment.currentTemp = self.data[np.isfinite(self.data)][-1]  
+            self.plotT.curve.setData(self.experiment.tempSensorModel.time,self.data)
             self.plotT.curve.setPen(color = self.colorTemp, width = self.averagePlotLineWidth)
             
 
     def animateGIF(self):
         
+        """
+        Animate Timelapse GIF
+        """  
         self.movie = QMovie(f"{os.path.join(self.savingFolder, self.gifName)}.gif")
         self.gifWindow.label.setMovie(self.movie)
         self.gifWindow.setWindowTitle(f"GIF RESULT: {self.gifName}")
@@ -187,9 +185,10 @@ class TimelapseMainWindow(QMainWindow):
 
     def updateGraphics(self):
 
-        """Update text labels on plot, previous data color schemes"""  
+        """
+        Update text labels on plot, previous data color schemes
+        """  
 
-        self.labelValue.setText(f"Data: {self.experiment.numFramesDone}/{self.experiment.numRequestedFrames}")
         if self.checkBoxCreateGIF.isChecked():
             
             self.savingFolder = os.path.join(self.experiment.exportPath, "Images")
@@ -205,19 +204,20 @@ class TimelapseMainWindow(QMainWindow):
 
     def makeGIF(self):
 
-        """Make GIF using result data"""
+        """
+        Make GIF using result data
+        """
 
         if self.checkBoxCreateGIF.isChecked() and len(self.experiment.GIFSourceNames) > 0 and not self.experiment.continueTimelapse:
             self.experiment.timelapseDone = False
             dfListGIF = [os.path.join(self.savingFolder, image) for image in self.experiment.GIFSourceNames]
             for imgPath in dfListGIF:
                 if not os.path.isfile(imgPath):
-                    print("Images not found, revising GIF source list")
+                    logger.warning("Images not found, revising GIF source list")
                     self.experiment.GIFSourceNames.remove(imgPath.split(f"{self.savingFolder}")[1])
-                    print(f"{imgPath.split(self.savingFolder)[1]}")
-                    print("************************************")
-                    print(f"{imgPath.split(self.savingFolder)[0]}")
-
+                    logger.info(f"{imgPath.split(self.savingFolder)[1]}")
+                    logger.info("************************************")
+                    logger.info(f"{imgPath.split(self.savingFolder)[0]}")
 
             self.gifList = [Image.open(os.path.join(self.savingFolder, image)) for image in self.experiment.GIFSourceNames] 
 
@@ -226,14 +226,14 @@ class TimelapseMainWindow(QMainWindow):
             frame_one.save(f"{os.path.join(self.savingFolder, self.gifName)}.gif", format="GIF", append_images=self.gifList,
                 save_all=True, duration=100, loop=0)
             if not self.checkBox_keepSrcImgs.isChecked(): 
-                    print("DELETING SOURCE IMAGES")
+                    logger.info("DELETING SOURCE IMAGES")
                     self.filesToRemove = [os.path.join(self.savingFolder, img) for img in self.experiment.GIFSourceNames]
                     for f in self.filesToRemove:
-                        print(f"Removing {f}")
+                        logger.info(f"Removing {f}")
                         try:
                             os.remove(f)
                         except ValueError:
-                            print("file already removed")
+                            logger.warning("file already removed")
             self.btnAnimateResult.setEnabled(True)
                 
 
@@ -276,32 +276,57 @@ class TimelapseMainWindow(QMainWindow):
 
     def disableLEdit(self):
 
-        """"Disable line edit fields during acquisition"""
+        """
+        Disable line edit fields during acquisition
+        """
 
         self.lEditTdsStart.setReadOnly(True)
         self.lEditTdsAvgs.setReadOnly(True)
         self.lEditFrames.setReadOnly(True)
         self.lEditInterval.setReadOnly(True)
-        self.btnAnimateResult.setEnabled(False)
+        self.lEditMaterial.setReadOnly(True)
+        
 
 
     def enableLEdit(self):
 
-        """"Enable line edit fields when ScanControl has stopped"""
+        """
+        Enable line edit fields when ScanControl has stopped
+        """
 
         self.lEditTdsStart.setReadOnly(False)
         self.lEditTdsAvgs.setReadOnly(False)
         self.lEditFrames.setReadOnly(False)
         self.lEditInterval.setReadOnly(False)
+        self.lEditMaterial.setReadOnly(False)
       
-
 
     def avgsChanged(self):
 
-        """"Terminal Message"""
+        """
+        Terminal Message
+        """
 
-        print(f"Experiment averages changed to : {self.experiment.numAvgs}")
+        logger.info(f"Experiment averages changed to : {self.experiment.numAvgs}")
         
+
+    def validateMaterial(self):
+
+        """
+        Validate material name for scan
+        """
+
+        if self.lEditMaterial.text() is not None and self.lEditMaterial.text() != "":
+            str = self.lEditMaterial.text()
+            filteredStr = ''.join(e for e in str if e.isalnum())
+            self.lEditMaterial.setText(filteredStr)
+            self.experiment.scanName = filteredStr
+            logger.info(f"Material accepted: {self.experiment.scanName}")
+        else:
+            self.lEditMaterial.setText("Data")
+            self.experiment.scanName = "Data"
+            logger.warning("Using default name - data")
+
 
     def validateInterval(self):
 
@@ -315,19 +340,19 @@ class TimelapseMainWindow(QMainWindow):
             if isinstance(interval, int):
                 interval = interval*ur("s")
             if interval.units in ["second", "minute", "hour"]: 
-                print("Interval is a valid time input")
-                print("Timelapse interval ACCEPTED")
+                logger.info("Interval is a valid time input")
+                logger.info("Timelapse interval ACCEPTED")
                 self.experiment.interval = interval.m_as("second")
-                print(f"Interval is set to {self.experiment.interval} seconds")
+                logger.info(f"Interval is set to {self.experiment.interval} seconds")
             else:
-                print("Interval units are not valid time inputs, Setting default config values")
-                print("Enter valid units, for example: '0.5hour', '420ms', '5min' . . . ")
+                logger.warning("Interval units are not valid time inputs, Setting default config values")
+                logger.warning("Enter valid units, for example: '0.5hour', '420ms', '5min' . . . ")
                 self.lEditInterval.setText(str(self.experiment.config['Timelapse']['interval']))
                 self.interval = ur(str(self.experiment.config['Timelapse']['interval'])).m_as("second")
             self.experiment.intervalOk = True
         except UndefinedUnitError:
             self.experiment.intervalOk = False
-            print("Undefined / Incorrect units. Setting default config value")
+            logger.info("Undefined / Incorrect units. Setting default config value")
             self.lEditInterval.setText(str(self.experiment.config['Timelapse']['interval']))
             self.interval = ur(str(self.experiment.config['Timelapse']['interval']))
             self.experiment.intervalOk = True
@@ -335,21 +360,20 @@ class TimelapseMainWindow(QMainWindow):
 
     def validateEditFrames(self):
 
-        
         """
             Validate user input for Requested Frames of the timelapse
         """ 
         
         validationRule = QIntValidator(0,self.experiment.maxFrames)
-        print(validationRule.validate(self.lEditFrames.text(),self.experiment.maxFrames))
+        logger.info(validationRule.validate(self.lEditFrames.text(),self.experiment.maxFrames))
         if validationRule.validate(self.lEditFrames.text(),
                                    self.experiment.maxFrames)[0] == QValidator.Acceptable:
-            print(f"TIMELAPSE FRAMES ACCEPTED")
+            logger.info(f"TIMELAPSE FRAMES ACCEPTED")
             self.experiment.framesOk = True
             self.experiment.numRequestedFrames = int(self.lEditFrames.text())
         else:
-            print(f"> [WARNING]:Requested frames exceed allowed storage of {self.experiment.maxStorage}")
-            print(f"Setting frames to default maximum: {self.experiment.maxFrames} ")
+            logger.warning(f"> [WARNING]:Requested frames exceed allowed storage of {self.experiment.maxStorage}")
+            logger.warning(f"Setting frames to default maximum: {self.experiment.maxFrames} ")
             self.experiment.numRequestedFrames = self.experiment.maxFrames
             self.lEditFrames.setText(str(self.experiment.numRequestedFrames))
 
@@ -361,10 +385,10 @@ class TimelapseMainWindow(QMainWindow):
         """
 
         validationRule = QDoubleValidator(-420,420,3)
-        print(validationRule.validate(self.lEditTdsStart.text(),420))
+        logger.info(validationRule.validate(self.lEditTdsStart.text(),420))
         if validationRule.validate(self.lEditTdsStart.text(),
                                    420)[0] == QValidator.Acceptable:
-            print("TDS START TIME ACCEPTED")
+            logger.info("TDS START TIME ACCEPTED")
             self.experiment.startOk = True
             self.experiment.startTime = float(self.lEditTdsStart.text())
             
@@ -373,10 +397,10 @@ class TimelapseMainWindow(QMainWindow):
             self.experiment.endOk = True
             self.experiment.tdsParams['start'] = self.experiment.startTime
             self.experiment.tdsParams['end'] = self.experiment.endTime
-            print(f"End time is set to be {self.experiment.TdsWin} ps after THz pulse start at {self.experiment.startTime} ps")
-            print("TDS END TIME ACCEPTED")
+            logger.info(f"End time is set to be {self.experiment.TdsWin} ps after THz pulse start at {self.experiment.startTime} ps")
+            logger.info("TDS END TIME ACCEPTED")
         else:
-            print("[ERROR] InvalidInput: Setting default config value")
+            logger.warning("[WARNING] InvalidInput: Setting default config value")
             self.experiment.startOk = False
             self.lEditTdsStart.setText(str(self.experiment.config['TScan']['begin']))
 
@@ -395,9 +419,10 @@ class TimelapseMainWindow(QMainWindow):
         self.lEditFrames.editingFinished.emit()
         self.lEditInterval.setText(str(self.experiment.config['Timelapse']['interval']))
         self.lEditInterval.editingFinished.emit()
+        self.lEditMaterial.editingFinished.emit()
         self.loadTDSParams()
     
-        print("> [SCANCONTROL] Setting TDS parameters: Done\n")        
+        logger.info("> [SCANCONTROL] Setting TDS parameters: Done\n")        
 
 
     def loadTDSParams(self):
@@ -407,7 +432,7 @@ class TimelapseMainWindow(QMainWindow):
         """
 
         if (self.experiment.startOk and self.experiment.endOk and self.experiment.avgsOk and self.experiment.intervalOk and self.experiment.framesOk):
-            print("TDS Inputs accepted")
+            logger.info("TDS Inputs accepted")
             self.experiment.device.setBegin(self.experiment.startTime)
             self.experiment.device.setEnd(self.experiment.endTime)
             self.btnStart.setEnabled(True)
@@ -420,16 +445,16 @@ class TimelapseMainWindow(QMainWindow):
         """
                 
         validationRule = QIntValidator(1,2000)
-        print(validationRule.validate(self.lEditTdsAvgs.text(),2000))
+        logger.info(validationRule.validate(self.lEditTdsAvgs.text(),2000))
         if validationRule.validate(self.lEditTdsAvgs.text(),
                                    2000)[0] == QValidator.Acceptable:
-            print("TDS AVGS ACCEPTED")
+            logger.info("TDS AVGS ACCEPTED")
             self.experiment.avgsOk = True
             self.experiment.numAvgs = int(self.lEditTdsAvgs.text())
             self.experiment.tdsParams['numAvgs'] = self.experiment.numAvgs
             
         else:
-            print("[ERROR] InvalidInput: Setting default config value")
+            logger.warning("[ERROR] InvalidInput: Setting default config value")
             self.experiment.avgsOK = False
             self.lEditTdsAvgs.setText(str(self.experiment.config['TScan']['numAvgs']))
 
@@ -441,10 +466,10 @@ class TimelapseMainWindow(QMainWindow):
         """
 
         self.height = 950
-        self.width = 570
+        self.width = 1100
         self.left = 10
         self.top = 40      
-        self.labelValue = None         #LabelItem to display timelapse frames on plot
+      
         self.setGeometry(self.left, self.top, self.width, self.height)   
         self.livePlot.setXRange(0, 5.3, padding = 0)
         self.livePlot.setYRange(-280, -100, padding = 0)
@@ -458,10 +483,11 @@ class TimelapseMainWindow(QMainWindow):
 
     def openSerial(self):
         
-        """Open serial port for communication with QC robot"""
+        """
+        Open serial port for communication with QC robot
+        """
 
-        
-        self.tempSensorModel.serial.open(QIODevice.ReadWrite)
+        self.experiment.tempSensorModel.serial.open(QIODevice.ReadWrite)
 
 
     def initUI(self):
@@ -470,7 +496,7 @@ class TimelapseMainWindow(QMainWindow):
             Initialise UI from design file
         """
 
-        uic.loadUi("View/Designer/periodicMeasurementUI.ui", self)
+        uic.loadUi(os.path.join(uiDir,"periodicMeasurementUI.ui"), self)
         self.setWindowTitle("THEA Timelapse")
         self.disableButtons()
         self.initAttribs()
@@ -478,29 +504,20 @@ class TimelapseMainWindow(QMainWindow):
         self.validateDefaultInputs()
         self.progAvg.setValue(self.experiment.avgProgVal)
         self.progTlapse.setValue(self.experiment.tlapseProgVal)
-        
         self.livePlot.setLabel('left', 'Transmission Intensity (dB)')
         self.livePlot.setLabel('bottom', 'Frequency (THz)')
-        self.livePlot.setTitle("""Timelapse FFT""", color = 'g', size = "45 pt")   
+        self.livePlot.setTitle("""Signal FFT""", color = 'g', size = "45 pt")   
         self.livePlot.showGrid(x = True, y = True)
-        self.labelValue = TextItem('', **{'color': '#FFF'})
-        self.labelValue.setPos(QPointF(4,-100))
-
         self.lEditTdsStart.setAlignment(Qt.AlignCenter) 
         self.lEditTdsEnd.setAlignment(Qt.AlignCenter) 
         self.lEditTdsAvgs.setAlignment(Qt.AlignCenter) 
-        self.livePlot.addItem(self.labelValue)
-
         self.checkBoxCreateGIF.setCheckable(True)
         self.checkBox_keepSrcImgs.setCheckable(True)
-       
         self.exporter = ImageExporter(self.livePlot.scene())   # Exporter for creating plot images
         self.exporter.parameters()['width'] = 500
         self.gifList = None
         self.gifWindow = AnotherWindow()
         self.gifName = ""
-
-        
         self.colorTemp = (255,255,0, 180)
         self.livePlot_2.setLabel('left', 'Temperature (C)')
         self.livePlot_2.setLabel('bottom', 'Observations - 1/Sampling Rate (sec)')
@@ -508,22 +525,15 @@ class TimelapseMainWindow(QMainWindow):
         self.livePlot_2.showGrid(x = True, y = True)
         self.TplotDataContainer = {}
         self.averagePlotLineWidth = 2
-
-        self.labelValue = TextItem('', **{'color': '#FFF'})
-        self.labelValue.setPos(QPointF(4,-100))
-
         self.lEditTdsStart.setAlignment(Qt.AlignCenter) 
         self.lEditTdsEnd.setAlignment(Qt.AlignCenter) 
         self.lEditTdsAvgs.setAlignment(Qt.AlignCenter) 
-        self.livePlot_2.addItem(self.labelValue)
-        self.scroll = QScrollBar(Qt.Horizontal)
         self.xmin = 1
-        self.xmax = self.tempSensorModel.config['TemperatureSensor']['scrollLength'] 
-        self.plotT = self.livePlot_2.plot(self.tempSensorModel.temperatures)
+        self.xmax = self.experiment.tempSensorModel.config['TemperatureSensor']['scrollLength'] 
+        self.plotT = self.livePlot_2.plot(self.experiment.tempSensorModel.temperatures)
         self.livePlot_2.setXRange(self.xmin, self.xmax)
         self.livePlot_2.setYRange(50, -100)
         self.lblTempBig.setText("Cold Finger temp. (C): --")
-
 
 
     def disableButtons(self):
@@ -533,6 +543,8 @@ class TimelapseMainWindow(QMainWindow):
         """
 
         self.btnStart.setEnabled(False)
+        self.btnStartTemp.setEnabled(False)
+        self.btnAnimateResult.setEnabled(False)
         self.btnAnimateResult.setEnabled(False)
 
 
@@ -542,13 +554,16 @@ class TimelapseMainWindow(QMainWindow):
             Enable GUI buttons for user interaction
         """
         
+        self.btnStartTemp.setEnabled(True)
         self.btnStart.setEnabled(True)
         self.btnStop.setEnabled(True)
         
-
+        
     def stop(self):
 
-        """Reset icons to offline state"""
+        """
+        Reset icons to offline state
+        """
         
         self.enableButtons()
         self.progTlapse.setValue(self.experiment.tlapseProgVal)
@@ -560,66 +575,75 @@ class TimelapseMainWindow(QMainWindow):
    
     def resetAveraging(self):
 
-        """"Reset averaging progress bar"""
+        """
+        Reset averaging progress bar
+        """
 
         self.progAvg.setValue(0)
 
 
-    
-
 ##################################### AsyncSlot coroutines #######################################
     
-
 
     @asyncSlot()
     async def receive(self):
 
-        """Receive messages on serial port and redirect to message box"""
+        """
+        Receive messages on serial port and redirect to message box
+        """
 
         
-        while self.tempSensorModel.serial.canReadLine():
+        while self.experiment.tempSensorModel.serial.canReadLine():
             
             codec = QTextCodec.codecForName("UTF-8")
-            line = codec.toUnicode(self.tempSensorModel.serial.readLine()).strip()
-            print(line)
-            
+            line = codec.toUnicode(self.experiment.tempSensorModel.serial.readLine()).strip()    
             if "deg C" in line:
-                self.tempSensorModel.nextScan.emit(line)
-                
-            self.tempSensorModel.lastMessage = line
+                self.experiment.tempSensorModel.nextScan.emit(line) 
+            self.experiment.tempSensorModel.lastMessage = line
             await asyncio.sleep(0)
 
 
     @asyncSlot()
     async def startObs(self):
-      
-        self.tempSensorModel.keepRunning = True
-        self.tempSensorModel.clearData()
-        while self.tempSensorModel.keepRunning:
-            self.tempSensorModel.tempObsTask =  asyncio.ensure_future(self.tempSensorModel.readTemp())
-            asyncio.gather(self.tempSensorModel.tempObsTask)
-            while not self.tempSensorModel.tempObsTask.done():
-                await asyncio.sleep(1/self.tempSensorModel.config['TemperatureSensor']['samplingRate'])
+
+        """
+        Start temperature sensing historical
+        """
+
+        self.btnStartTemp.setEnabled(False)
+        self.experiment.tempSensorModel.keepRunning = True
+        self.experiment.tempSensorModel.clearData()
+        while self.experiment.tempSensorModel.keepRunning:
+            self.experiment.tempSensorModel.tempObsTask =  asyncio.ensure_future(self.experiment.tempSensorModel.readTemp())
+            asyncio.gather(self.experiment.tempSensorModel.tempObsTask)
+            while not self.experiment.tempSensorModel.tempObsTask.done():
+                await asyncio.sleep(1/self.experiment.tempSensorModel.config['TemperatureSensor']['samplingRate'])
 
 
     @asyncSlot()
     async def stopObs(self):
-        self.tempSensorModel.keepRunning = False
+        """
+        Stop temperature sensing historical
+        """
+        self.btnStartTemp.setEnabled(True)
+        self.experiment.tempSensorModel.keepRunning = False
         try:
-            self.tempSensorModel.tempObsTask.cancel()
-            self.tempSensorModel.ackTask.cancel()
+            self.experiment.tempSensorModel.tempObsTask.cancel()
+            self.experiment.tempSensorModel.ackTask.cancel()
             self.epoch = 1
             self.ctr = 0
-            self.tempSensorModel.clearData()
+            self.experiment.tempSensorModel.clearData()
             self.lblTempBig.setText(f"Cold finger Temp (C): --")    
             self.xmin = 1
-            self.xmax = self.tempSensorModel.config['TemperatureSensor']['scrollLength'] 
+            self.xmax = self.experiment.tempSensorModel.config['TemperatureSensor']['scrollLength'] 
             self.livePlot_2.setXRange(self.xmin, self.xmax)
-            self.tempSensorModel.time = np.linspace(1,self.tempSensorModel.config['TemperatureSensor']['scrollLength'],
-                                               self.tempSensorModel.config['TemperatureSensor']['scrollLength'])
+            #self.experiment.tempSensorModel.time = np.linspace(1,self.experiment.tempSensorModel.config['TemperatureSensor']['scrollLength'],
+            #                                  self.experiment.tempSensorModel.config['TemperatureSensor']['scrollLength'])
+            self.experiment.tempSensorModel.clearData()
+            self.data[:] = np.NaN
+            self.plotT.curve.setData(self.experiment.tempSensorModel.time,self.data)
         except asyncio.exceptions.CancelledError:
             print("Cancelled Observation")
-
 
 
     @asyncSlot()
@@ -627,7 +651,6 @@ class TimelapseMainWindow(QMainWindow):
 
         """
             AsyncSlot Coroutine to indicate ScanControl Staus.
-
         """        
         
         
@@ -637,7 +660,9 @@ class TimelapseMainWindow(QMainWindow):
     @asyncSlot()
     async def enableAnimation(self):
 
-        """Enable animation button when timelapse finished"""
+        """
+        Enable animation button when timelapse finished
+        """
         
         if self.checkBoxCreateGIF.isChecked() and self.experiment.timelapseDone and not self.experiment.continueTimelapse:
             self.btnAnimateResult.setEnabled(True)
@@ -646,17 +671,14 @@ class TimelapseMainWindow(QMainWindow):
             self.btnAnimateResult.setEnabled(False)
           
 
-
     @asyncSlot()
     async def processPulses(self,data):
 
-        """"GUI button state management during data processing"""
+        """
+        GUI button state management during data processing
+        """
 
         await asyncio.sleep(0.01)
-        lblSceneX = self.livePlot.getViewBox().state['targetRange'][0][0] + np.abs(self.livePlot.getViewBox().state['targetRange'][0][1] - self.livePlot.getViewBox().state['targetRange'][0][0])*0.80
-        lblSceneY =  self.livePlot.getViewBox().state['targetRange'][1][0] + np.abs(self.livePlot.getViewBox().state['targetRange'][1][1] - self.livePlot.getViewBox().state['targetRange'][1][0])*0.95
-        self.labelValue.setPos(QPointF(lblSceneX,lblSceneY))
-
         if self.experiment.device.isAcquiring:
             self.lEditTdsAvgs.setText(str(self.experiment.numAvgs))
             self.progAvg.setValue(self.experiment.avgProgVal)
@@ -665,10 +687,10 @@ class TimelapseMainWindow(QMainWindow):
                        
             if self.plotDataContainer['livePulseFft'] is None :
                 self.plotDataContainer['livePulseFft'] = self.plot(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
-               
+                
             self.plotDataContainer['livePulseFft'].curve.setData(self.experiment.freq, 20*np.log(np.abs(self.experiment.FFT))) 
             self.plotDataContainer['livePulseFft'].curve.setPen(color = self.colorLivePulse, width = self.averagePlotLineWidth)
-
+           
 
 
 #******************************************************************************************
@@ -680,7 +702,7 @@ if __name__ == '__main__':
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
 
-    ttl = TheaTimelapse(loop, '../Model/timelapseConfig.yml')
+    ttl = TheaTimelapse(loop, config_file =os.path.join(configDir, "timelapseConfig.yml"))
     win = TimelapseMainWindow(ttl)
     win.show()
 
