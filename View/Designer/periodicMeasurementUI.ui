@@ -315,20 +315,7 @@
      </property>
     </widget>
    </widget>
-   <widget class="QLabel" name="lblStatus_2">
-    <property name="geometry">
-     <rect>
-      <x>970</x>
-      <y>870</y>
-      <width>131</width>
-      <height>16</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>TEC Freezer: OFF</string>
-    </property>
-   </widget>
-   <widget class="QWidget" name="">
+   <widget class="QWidget" name="layoutWidget">
     <property name="geometry">
      <rect>
       <x>750</x>
@@ -393,6 +380,28 @@
     <property name="text">
      <string>THEA TIMELAPSE</string>
     </property>
+   </widget>
+   <widget class="QWidget" name="layoutWidget_3">
+    <property name="geometry">
+     <rect>
+      <x>230</x>
+      <y>370</y>
+      <width>151</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <layout class="QHBoxLayout" name="horizontalLayout_7">
+     <item>
+      <widget class="QLabel" name="lblMaterial">
+       <property name="text">
+        <string>Material:        </string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="lEditMaterial"/>
+     </item>
+    </layout>
    </widget>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
