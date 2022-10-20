@@ -1,4 +1,3 @@
-from cmath import nan
 import sys
 import os
 
@@ -46,15 +45,15 @@ class TempTimelapseWindow(QMainWindow):
     THEA Timelapse GUI Main window class for low temperature measurements
     """
 
-    def __init__(self, experiment = None):
+    def __init__(self, tempSensorModel = None):
 
         super().__init__()
-        self.experiment = experiment
+        self.tempSensorModel = tempSensorModel
         self.initUI()
         self.openSerial()
     
     
-    def mouseMoved(self, evt):
+    def mouseMoved2(self, evt):
 
         """
             Track mouse movement on data plot in plot units (arb.dB vs THz)
@@ -79,42 +78,42 @@ class TempTimelapseWindow(QMainWindow):
 
         if "deg C" in line:
 
-            self.experiment.ctr += 1
+            self.tempSensorModel.ctr += 1
             temp = line.split("deg")[0]
             self.lblTempBig.setText(f"Cold finger Temp: {temp} C")  
 
             def correctData():
-                self.experiment.temperatures = np.append(self.experiment.temperatures, double(line.split("deg")[0]))
-                self.experiment.temperatures = np.roll(self.experiment.temperatures, 1)
-                self.experiment.temperatures = np.delete(self.experiment.temperatures, -1)
-                flipped = np.flip(self.experiment.temperatures)
+                self.tempSensorModel.temperatures = np.append(self.tempSensorModel.temperatures, double(line.split("deg")[0]))
+                self.tempSensorModel.temperatures = np.roll(self.tempSensorModel.temperatures, 1)
+                self.tempSensorModel.temperatures = np.delete(self.tempSensorModel.temperatures, -1)
+                flipped = np.flip(self.tempSensorModel.temperatures)
                 return flipped
                                 
-            if self.experiment.ctr != self.experiment.config['TemperatureSensor']['scrollLength']:
-                nanidx = self.experiment.ctr
+            if self.tempSensorModel.ctr != self.tempSensorModel.config['TemperatureSensor']['scrollLength']:
+                nanidx = self.tempSensorModel.ctr
                 flipped = correctData()
                 self.data = np.append(flipped[len(flipped)-nanidx:], flipped[:len(flipped)-nanidx])      
             
             else:
-                self.experiment.ctr = 1
-                self.experiment.epoch+=1
-                self.experiment.clearData()
-                self.xmin = self.xmin + self.experiment.config['TemperatureSensor']['scrollLength']
-                self.xmax = self.xmax + self.experiment.config['TemperatureSensor']['scrollLength']
-                self.experiment.time = np.linspace(self.xmin,self.xmax,self.experiment.config['TemperatureSensor']['scrollLength'])
+                self.tempSensorModel.ctr = 1
+                self.tempSensorModel.epoch+=1
+                self.tempSensorModel.clearData()
+                self.xmin = self.xmin + self.tempSensorModel.config['TemperatureSensor']['scrollLength']
+                self.xmax = self.xmax + self.tempSensorModel.config['TemperatureSensor']['scrollLength']
+                self.tempSensorModel.time = np.linspace(self.xmin,self.xmax,self.tempSensorModel.config['TemperatureSensor']['scrollLength'])
                 self.livePlot_2.setXRange(self.xmin, self.xmax)
                 
 
                 
                 flipped = correctData()
                 
-                nanidx =  self.experiment.ctr
-                self.data = self.experiment.temperatures
+                nanidx =  self.tempSensorModel.ctr
+                self.data = self.tempSensorModel.temperatures
                 print(self.data)
                 
                 
-            self.plotT.curve.setData(self.experiment.time,self.data)
-            self.plotT.curve.setPen(color = self.colorLivePulse, width = self.averagePlotLineWidth)
+            self.plotT.curve.setData(self.tempSensorModel.time,self.data)
+            self.plotT.curve.setPen(color = self.colorTemp, width = self.averagePlotLineWidth)
             
 
     def connectEvents(self):
@@ -123,9 +122,9 @@ class TempTimelapseWindow(QMainWindow):
             Connect GUI object and validator signals to respective methods.
         """
       
-        self.experiment.serial.readyRead.connect(self.receive)
-        self.experiment.nextScan.connect(self.plotTemp)
-        self.livePlot_2.scene().sigMouseMoved.connect(self.mouseMoved)
+        self.tempSensorModel.serial.readyRead.connect(self.receive)
+        self.tempSensorModel.nextScan.connect(self.plotTemp)
+        self.livePlot_2.scene().sigMouseMoved.connect(self.mouseMoved2)
         self.btnStartTemp.clicked.connect(self.startObs)
         self.btnStopTemp.clicked.connect(self.stopObs)
 
@@ -135,7 +134,7 @@ class TempTimelapseWindow(QMainWindow):
         """Open serial port for communication with QC robot"""
 
         
-        self.experiment.serial.open(QIODevice.ReadWrite)
+        self.tempSensorModel.serial.open(QIODevice.ReadWrite)
 
 
     def initUI(self):
@@ -150,7 +149,7 @@ class TempTimelapseWindow(QMainWindow):
         #self.initAttribs()
         self.connectEvents()
 
-        self.colorLivePulse = (255,255,0, 180)
+        self.colorTemp = (255,255,0, 180)
         self.livePlot_2.setLabel('left', 'Temperature (C)')
         self.livePlot_2.setLabel('bottom', 'Observations - 1/Sampling Rate (sec)')
         self.livePlot_2.setTitle("""Temperature historical""", color = 'g', size = "45 pt")   
@@ -167,8 +166,8 @@ class TempTimelapseWindow(QMainWindow):
         self.livePlot_2.addItem(self.labelValue)
         self.scroll = QScrollBar(Qt.Horizontal)
         self.xmin = 1
-        self.xmax = self.experiment.config['TemperatureSensor']['scrollLength'] 
-        self.plotT = self.livePlot_2.plot(self.experiment.temperatures)
+        self.xmax = self.tempSensorModel.config['TemperatureSensor']['scrollLength'] 
+        self.plotT = self.livePlot_2.plot(self.tempSensorModel.temperatures)
         self.livePlot_2.setXRange(self.xmin, self.xmax)
         self.livePlot_2.setYRange(50, -100)
         self.lblTempBig.setText("Cold Finger temp. (C): --")
@@ -180,46 +179,46 @@ class TempTimelapseWindow(QMainWindow):
         """Receive messages on serial port and redirect to message box"""
 
         
-        while self.experiment.serial.canReadLine():
+        while self.tempSensorModel.serial.canReadLine():
             
             codec = QTextCodec.codecForName("UTF-8")
-            line = codec.toUnicode(self.experiment.serial.readLine()).strip()
+            line = codec.toUnicode(self.tempSensorModel.serial.readLine()).strip()
             print(line)
             
             if "deg C" in line:
-                self.experiment.nextScan.emit(line)
+                self.tempSensorModel.nextScan.emit(line)
                 
-            self.experiment.lastMessage = line
+            self.tempSensorModel.lastMessage = line
             await asyncio.sleep(0)
 
 
     @asyncSlot()
     async def startObs(self):
       
-        self.experiment.keepRunning = True
-        self.experiment.clearData()
-        while self.experiment.keepRunning:
-            self.experiment.tempObsTask =  asyncio.ensure_future(self.experiment.readTemp())
-            asyncio.gather(self.experiment.tempObsTask)
-            while not self.experiment.tempObsTask.done():
-                await asyncio.sleep(1/self.experiment.config['TemperatureSensor']['samplingRate'])
+        self.tempSensorModel.keepRunning = True
+        self.tempSensorModel.clearData()
+        while self.tempSensorModel.keepRunning:
+            self.tempSensorModel.tempObsTask =  asyncio.ensure_future(self.tempSensorModel.readTemp())
+            asyncio.gather(self.tempSensorModel.tempObsTask)
+            while not self.tempSensorModel.tempObsTask.done():
+                await asyncio.sleep(1/self.tempSensorModel.config['TemperatureSensor']['samplingRate'])
 
 
     @asyncSlot()
     async def stopObs(self):
-        self.experiment.keepRunning = False
+        self.tempSensorModel.keepRunning = False
         try:
-            self.experiment.tempObsTask.cancel()
-            self.experiment.ackTask.cancel()
+            self.tempSensorModel.tempObsTask.cancel()
+            self.tempSensorModel.ackTask.cancel()
             self.epoch = 1
             self.ctr = 0
-            self.experiment.clearData()
+            self.tempSensorModel.clearData()
             self.lblTempBig.setText(f"Cold finger Temp (C): --")    
             self.xmin = 1
-            self.xmax = self.experiment.config['TemperatureSensor']['scrollLength'] 
+            self.xmax = self.tempSensorModel.config['TemperatureSensor']['scrollLength'] 
             self.livePlot_2.setXRange(self.xmin, self.xmax)
-            self.experiment.time = np.linspace(1,self.experiment.config['TemperatureSensor']['scrollLength'],
-                                               self.experiment.config['TemperatureSensor']['scrollLength'])
+            self.tempSensorModel.time = np.linspace(1,self.tempSensorModel.config['TemperatureSensor']['scrollLength'],
+                                               self.tempSensorModel.config['TemperatureSensor']['scrollLength'])
         except asyncio.exceptions.CancelledError:
             print("Cancelled Observation")
 

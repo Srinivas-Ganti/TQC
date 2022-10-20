@@ -26,8 +26,10 @@ class TheaTimelapse(Experiment):
     def __init__(self, loop = None, configFile = None):
         
         super().__init__(loop, configFile)
-        self.initialise()
-        
+        try:
+            self.initialise()
+        except Exception as e:
+            raise e
 
     def initialise(self):
 
@@ -61,7 +63,9 @@ class TheaTimelapse(Experiment):
         self.intervalOk = False                               # Flag for timelapse interval validation
         self.srcTDS = []                                      # list to store tds dictionaries
         self.dtlist = []                                      # list to store datetime information  
- 
+        
+
+
     def initAttribs(self):
 
         """

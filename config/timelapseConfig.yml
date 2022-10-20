@@ -19,5 +19,5 @@ TemperatureSensor:
   port: COM6
   baudrate: 115200
   timeout: 2
-  scrollLength: 10
+  scrollLength: 300
   samplingRate: 0.75 
