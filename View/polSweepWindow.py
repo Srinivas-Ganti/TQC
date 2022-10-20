@@ -77,6 +77,7 @@ class PolSweepMainWindow(QMainWindow):
         self.initUI()
         self.openSerial()
     
+    
     def connectEvents(self):
         
         """
