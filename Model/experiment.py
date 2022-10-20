@@ -13,7 +13,16 @@ from scipy import signal as sgnl
 import signal
 
 baseDir =  os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+modelDir = os.path.join(baseDir, "Model")
+viewDir = os.path.join(baseDir, "View")
+uiDir = os.path.join(viewDir, "Designer")
+configDir = os.path.join(baseDir, "config")
+
 sys.path.append(baseDir)
+sys.path.append(modelDir)
+sys.path.append(viewDir)
+sys.path.append(configDir)
+sys.path.append(uiDir)
 
 from Controller.TQC_controller import *
 
@@ -35,7 +44,6 @@ stream_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 logger.addHandler(stream_handler)
 
-        
 
 class Experiment(QWidget):
 
@@ -64,30 +72,24 @@ class Experiment(QWidget):
             raise f
         
 
-
     def makeHeader(self, kind = 'default'):
 
-        """Makes a header for the file to be saved"""
+        """
+        Makes a header for the file to be saved
+        """
 
-        currentDatetime = datetime.now()
-        
+        currentDatetime = datetime.now() 
         if kind == 'default':
-
-            
             header = f"""THEA QC - RAM Group GmbH & Menlo Systems GmbH\nProgram Version 1.05\nAverage over {self.device.scanControl.desiredAverages} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}, Lot number: {self.lotNum}, wafer num: {self.waferId}
             User time axis shift: {self.config['TScan']['begin']*-1}
             Time [ps]              THz Signal [mV]"""  
 
             filename = f"""{currentDatetime.strftime("%y-%m-%dT%H%M%S")}_T_NIL_RH_NIL_PID_NIL_SN_{self.sensorId}_Reference.txt"""    
-
         if kind == 'qc':
-
             header = f"""THEA QC - RAM Group GmbH, powered by Menlo Systems\nProgram Version 1.05\nAverage over {self.numAvgs} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}
             User time axis shift: {self.config['TScan']['begin']*-1}, QC Parameters: {self.qcParams}
             Time [ps]              THz Signal [mV]"""
-
         filename = f"""{currentDatetime.strftime("%y-%m-%dT%H%M%S")}_T_NIL_RH_NIL_PID_NIL_SN_{self.sensorId}_{self.qcResult}_Reference.txt"""    
-        
         return header, filename
 
 
@@ -99,14 +101,17 @@ class Experiment(QWidget):
 
         with open(self.config_file, 'r') as f:
             data = yaml.load(f, Loader= yaml.FullLoader)
-
+            logger.info("LOADING CONFIG")
+            print(data)
         self.config = data
         self.configLoaded = True
 
 
     def loadDevice(self):
 
-        """Load ScanControl object"""
+        """
+        Load ScanControl object
+        """
 
         self.device = Device(self.loop)
         self.initialiseModel()
@@ -115,7 +120,9 @@ class Experiment(QWidget):
     
     def initialiseModel(self):
 
-        """Initialse scancontrol with startup measurement parameters"""
+        """
+        Initialse scancontrol with startup measurement parameters
+        """
 
         logger.info("Setting ScanControl measurement parameters")
         self.device.resetAveraging()
@@ -188,7 +195,6 @@ class Experiment(QWidget):
 
             :return: frequency axis data and FFT data
             :rtype: numpy array, numpy array
-
         """        
 
         t_ser_len = 16384
@@ -212,7 +218,7 @@ class Experiment(QWidget):
         
     def find_nearest(self, array, value):        
 
-        """"
+        """
         Retrun the index and value of the element in the array that is nearest to the given input value
         
             :type array: numpy array
@@ -222,10 +228,7 @@ class Experiment(QWidget):
 
             :return: resulting array index and its value, 
             :rtype: int, float
-
-
         """
-
         array = np.asarray(array)
         idx = (np.abs(array - value)).argmin()
         return idx, array[idx] 
@@ -242,18 +245,12 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)    
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
-
-   
     experiment = Experiment(loop, 'experiment.yml')
     print(experiment.config)
-   
-    
     experiment.device.pulseReady.connect(experiment.device.collectAverages)
     experiment.device.dataUpdateReady.connect(experiment.saveAverageData)
-
     experiment.device.start()
 
     with loop: 
-
         sys.exit(loop.run_forever())
         
