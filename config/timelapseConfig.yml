@@ -1,7 +1,7 @@
 
 Export:
   filename: data.dat
-  saveDir: C:\Users\TeraSmart\Documents\PythonSoftwareTestExportData\TimelapseExport
+  saveDir: C:\Users\TeraSmart-PC\Documents\TheaPython\Analysis and Data\TimelapseExports
 Spectrometer:
   name: TERASMART
   systemNum: 9
@@ -16,8 +16,8 @@ Timelapse:
   _filesize : 606 kB # typical filesize - private!
   numDisplayDataSeries: 5
 TemperatureSensor:
-  port: COM6
+  port: COM5
   baudrate: 115200
-  timeout: 2
+  timeout: 4
   scrollLength: 300
   samplingRate: 0.75 
