@@ -1,12 +1,20 @@
 import sys
 import os
-
-
 from pyqtgraph.exporters import ImageExporter
+
 baseDir =  os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+modelDir = os.path.join(baseDir, "Model")
+viewDir = os.path.join(baseDir, "View")
+uiDir = os.path.join(viewDir, "Designer")
+configDir = os.path.join(viewDir, "config")
 rscDir = os.path.join(baseDir, "Resources")
-configDir = os.path.join(baseDir, "Model")  # if keeping in same dir as model
+
 sys.path.append(baseDir)
+sys.path.append(modelDir)
+sys.path.append(rscDir)
+sys.path.append(viewDir)
+sys.path.append(configDir)
+sys.path.append(uiDir)
 
 
 from Model.experiment import *
@@ -14,22 +22,40 @@ from Resources import ur
 from MenloLoader import MenloLoader
 import pandas as pd
 
+
+from Model.TemperatureSensor import *
 # from scipy.signal import find_peaks
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+formatter = logging.Formatter("%(asctime)s:%(name)s:%(message)s")
+
+file_handler = logging.FileHandler(os.path.join(logDir, 'experiment.log'))
+stream_handler = logging.StreamHandler()
+
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(formatter)
+
+stream_handler.setLevel(logging.DEBUG)
+stream_handler.setFormatter(formatter)
+
+logger.addHandler(file_handler)
+logger.addHandler(stream_handler)
 
 class TheaTimelapse(Experiment):
 
     timelapseFinished = pyqtSignal()
     nextScan = pyqtSignal() 
     
-
-    def __init__(self, loop = None, configFile = None):
+    def __init__(self, loop = None, config_file = None):
         
-        super().__init__(loop, configFile)
+        super().__init__(loop, config_file)
         try:
             self.initialise()
         except Exception as e:
             raise e
+
 
     def initialise(self):
 
@@ -37,11 +63,9 @@ class TheaTimelapse(Experiment):
             Initialise experiment parameters
         """
 
-
         if self.configLoaded:
             self.initAttribs()
             self.initResources()
-            
             self.mLoader = MenloLoader([])          # fileLoader object
             self.TdsWin = self.config['TScan']['window']
             self.maxStorage = self.config['Timelapse']['maxStorage']
@@ -65,7 +89,6 @@ class TheaTimelapse(Experiment):
         self.dtlist = []                                      # list to store datetime information  
         
 
-
     def initAttribs(self):
 
         """
@@ -74,11 +97,9 @@ class TheaTimelapse(Experiment):
 
         self.pulseAmp = None                       # Received pulse data              
         self.timeAxis = None                       # time data 
-        
         self.TdsWin = None                         # TDS windowing duration (ps)
         self.FFT = None                            # FFT of the current pulse data
         self.freq = None                           # frequency (THz)
-        
         self.avgProgVal = 0                        # counter for averaging progress bar
         self.tlapseProgVal = 0                     # counter for timelapse progress bar     
         self.numAvgs = None                        # number of set averages
@@ -88,7 +109,7 @@ class TheaTimelapse(Experiment):
         self.numRequestedFrames = None             # frames requested by user 
         self.tdsParams = {}                        # Empty dictionary to hold TDS pulse parameters
         self.currentAverageFft = None              # averaged pulse FFT
-        
+        self.scanName = None                       # Name for dataframe to be saved
         self.currentFrame = None                   # current frame to be saved
         self.numData = None                        # progress ctr for timelapse         
         self.filesize = None                       # filesize in kB , +1 kB for safety 
@@ -100,13 +121,36 @@ class TheaTimelapse(Experiment):
         self.timelapseDone = False                 # flag to control progress
         self.results = pd.DataFrame()                      # this will be the resulting dataFrame
         self.GIFSourceNames = []                   # names of files to make a GIF out of
+        self.tempSensorModel = None                # temperature sensor model
+        self.port = None                           # serial communication port
+        self.configLoaded = None                   # config loaded flag
+        self.serial = None                         # serial communications object
+        self.baudrate = None                       # baudrate for serial communication
+        self.lastMessage = None                    # serial data received
+        self.ackTask = None                        # wait for ACK task  
+        self.ctr = 0                               # temperature observations counter 
+        self.epoch = 1                             # temperature data buffer counter
+        self.keepRunning = False                   # continue flag for temperature observations
+        self.tempObsTask = None                    # temperature observation task
+        self.currentTemp = None                    # sensor reading temperature
 
 
     def checkSessionStorage(self):
 
-        """Compute maximum allowable frames to be saved"""
+        """
+        Compute maximum allowable frames to be saved
+        """
 
         self.maxFrames = int(ur(self.maxStorage).m_as('kB')/ur(self.filesize).m_as('kB'))
+
+
+    def initTemperatureSensor(self, loop, configFileName):
+        
+        """
+            Initialise MAX31855 sensor object
+        """
+
+        self.tempSensorModel = MAXSerialTemp(loop, configFileName)
 
 
     def findResonanceMinima(self,data):
@@ -131,7 +175,6 @@ class TheaTimelapse(Experiment):
         rMinima = f[np.argmin(y)]
         return rMinima
         
-
 
 ##################################### AsyncSlot coroutines #######################################
 
@@ -165,42 +208,50 @@ class TheaTimelapse(Experiment):
             AsyncSlot coroutine to initiate the averaging task. Buttons are partially disabled during the process. 
         """                
         await asyncio.sleep(0.1)
+        
         if numAvgs == None:            
             self.device.setDesiredAverages(self.numAvgs)
-            print(f"default averaginig: {self.numAvgs}")
+            logger.info(f"default averaginig: {self.numAvgs}")
         else:
             self.device.setDesiredAverages(numAvgs)
-            print(f"special averaginig: {numAvgs}")
+            logger.info(f"special averaginig: {numAvgs}")
                 
         await asyncio.sleep(1)
         self.device.keepRunning = True
         self.device.avgTask = asyncio.ensure_future(self.device.doAvgTask())
+        temp1 = self.currentTemp
         await asyncio.gather(self.device.avgTask)
         while not self.device.isAveragingDone():
             await asyncio.sleep(1)
         if self.device.isAveragingDone():
-            print(f"{self.device.scanControl.currentAverages}/{self.device.scanControl.desiredAverages}")
-            print("DONE")
+            temp2 = self.currentTemp
+            logger.info(f"{self.device.scanControl.currentAverages}/{self.device.scanControl.desiredAverages}")
+            logger.info("Averaging completed")
             rawExportData = np.vstack([self.timeAxis, self.pulseAmp]).T
             currentDatetime = datetime.now()
 
             header = f"""THEA TIMELAPSE - RAM Group GmbH, powered by Menlo Systems\nProgram Version 0.2\nAverage over {self.numAvgs} waveforms. Start: {self.config['TScan']['begin']} ps, Timestamp: {currentDatetime.strftime('%Y-%m-%dT%H:%M:%S')}
     User time axis shift: {self.config['TScan']['begin']*-1}
     Time [ps]              THz Signal [mV]"""
-            base_name = f"""{currentDatetime.strftime("%d%m%yT%H%M%S")}_data{self.numFramesDone+1:04d}"""
+            base_name = f"""{currentDatetime.strftime("%d%m%yT%H%M%S")}_{self.scanName}_{temp1}C_{temp2}C_data{self.numFramesDone+1:04d}"""
             exportPath = os.path.join(self.exportPath, base_name)
             data_file = os.path.join(exportPath.replace("/","\\") +'.txt')
-            print(f"EXPORTED: {data_file}")
-            df = pd.DataFrame.from_dict({'frameNum': f"data{self.numFramesDone+1:04d}" , 'datetime': currentDatetime, 'time':self.timeAxis, 'amp':self.pulseAmp, 'freq' : self.freq, 'FFT': self.FFT}, orient='index')
+            logger.info(f"EXPORTED: {data_file}")
+            df = pd.DataFrame.from_dict({'frameNum': f"data{self.numFramesDone+1:04d}" , 
+                                         'datetime': currentDatetime, 
+                                         'time':self.timeAxis, 
+                                         'amp':self.pulseAmp, 
+                                         'freq' : self.freq, 
+                                         'FFT': self.FFT, 
+                                         'startTemp':temp1,
+                                         "endTemp":temp2},
+                                          orient='index')
             df = df.transpose()
             self.results = pd.concat([self.results, df], axis = 0).reset_index(drop = True)
-            
-            np.savetxt(data_file, rawExportData, header = header, delimiter = '\t' )  
+            #np.savetxt(data_file, rawExportData, header = header, delimiter = '\t' )  
             self.numFramesDone +=1
-            
             print(self.results.tail())
 
-            
 
     @asyncSlot()
     async def newScan(self):
@@ -225,31 +276,32 @@ class TheaTimelapse(Experiment):
                 self.numRequestedFrames = self.maxFrames
             for i in range(self.numRequestedFrames):
                 if self.continueTimelapse:       
-                    print(f"[TIMELAPSE]: FRAME {i+1}/{self.numRequestedFrames}")
+                    logger.info(f"[TIMELAPSE]: FRAME {i+1}/{self.numRequestedFrames}")
                     self.timelapseTask =  asyncio.ensure_future(self.newScan())
                     asyncio.gather(self.timelapseTask)
                     self.nextScan.emit()
                     while not self.timelapseTask.done():
                         await asyncio.sleep(1)
                     self.tlapseProgVal = int((i+1)/self.numRequestedFrames*100)
-                    print(f"[TIMELAPSE]: {self.tlapseProgVal}% - FRAME {i+1}/{self.numRequestedFrames}")
-
                     
+                    logger.info(f"[TIMELAPSE]: {self.tlapseProgVal}% - FRAME {i+1}/{self.numRequestedFrames}")
                     if i+1 < self.numRequestedFrames:
-                        print(f"[TIMELAPSE]: AWAITING INTERVAL TIMEOUT . . . {self.interval} seconds ")
+                        logger.info(f"[TIMELAPSE]: AWAITING INTERVAL TIMEOUT . . . {self.interval} seconds ")
                         await asyncio.sleep(self.interval) 
-                    print(f"[TIMELAPSE]: {self.tlapseProgVal}% FINISHED - FRAMES {i+1}/{self.numRequestedFrames} DONE")
+                    logger.info(f"[TIMELAPSE]: {self.tlapseProgVal}% FINISHED - FRAMES {i+1}/{self.numRequestedFrames} DONE")
                     self.nextScan.emit()
             await asyncio.sleep(2)
             self.cancelTasks()
             self.device.stop()
             self.timelapseDone = True
             self.numFramesDone = 0 # reset counter for new timelapse if initiated through the GUI
-            self.timelapseFinished.emit()
+            df = self.results 
+            df.to_pickle(f"{self.scanName}_{self.interval}s_{self.numRequestedFrames}.pkl")
+            logger.info("TIMELAPSE FINISHED - DATAFRAME EXPORTED")
         except asyncio.exceptions.CancelledError:
-            print("CANCELLED TIMELAPSE")        
-
-    
+            logger.info("CANCELLED TIMELAPSE")        
+            self.timelapseFinished.emit()
+     
 
     @asyncSlot()
     async def cancelTasks(self):
@@ -258,7 +310,7 @@ class TheaTimelapse(Experiment):
             Cancel async tasks. (software stop)
         """
 
-        print("cancelling previously scheduled tasks")
+        logger.info("cancelling previously scheduled tasks")
         try:
             if self.device.avgTask is not None:
                 self.continueTimelapse = False
@@ -271,9 +323,11 @@ class TheaTimelapse(Experiment):
                 self.tlapseProgVal = 0
                 self.numFramesDone = 0
                 self.continueTimelapse = False
+                if self.tempObsTask is not None:
+                    self.tempObsTask.cancel()
         
         except asyncio.exceptions.CancelledError:
-            print("Shutting down tasks")
+            logger.info("Shutting down tasks")
 
 
 #*********************************************************************************************************************
