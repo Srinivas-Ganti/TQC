@@ -1,3 +1,6 @@
+"""Gorilla graphic courtsey Vecteezy.com"""
+
+
 import sys
 import os
 from numpy import double
@@ -6,12 +9,14 @@ baseDir =  os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 modelDir = os.path.join(baseDir, "Model")
 viewDir = os.path.join(baseDir, "View")
 uiDir = os.path.join(viewDir, "Designer")
-configDir = os.path.join(viewDir, "config")
+configDir = os.path.join(baseDir, "config")
+rscDir = os.path.join(baseDir, "Resources")
 sys.path.append(baseDir)
 sys.path.append(modelDir)
 sys.path.append(viewDir)
 sys.path.append(configDir)
 sys.path.append(uiDir)
+sys.path.append(rscDir)
 
 from Model.theaTimelapse import *
 from Model import ur
@@ -534,7 +539,18 @@ class TimelapseMainWindow(QMainWindow):
         self.livePlot_2.setXRange(self.xmin, self.xmax)
         self.livePlot_2.setYRange(50, -100)
         self.lblTempBig.setText("Cold Finger temp. (C): --")
-
+               
+        pixmap = QPixmap(os.path.join(rscDir,"logos",'coolGorilla.jpg'))
+        self.lblGraphic.setPixmap(pixmap)
+        self.lblGraphic.setScaledContents(True)
+        self.lblGraphic.show()
+        pixmap = QPixmap(os.path.join(rscDir,"logos",'waves.png'))
+        self.lblGraphic_2.setPixmap(pixmap)
+        self.lblGraphic_2.setScaledContents(True)
+        self.lblGraphic_2.show()
+        self.lblGraphic_3.setPixmap(pixmap)
+        self.lblGraphic_3.setScaledContents(True)
+        self.lblGraphic_3.show()
 
     def disableButtons(self):
 
