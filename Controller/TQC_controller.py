@@ -201,7 +201,6 @@ class Device(QWidget):
                     avgData = self.pulseData
                     self.dataUpdateReady.emit(avgData)
         except asyncio.exceptions.CancelledError as c:
-            print("Really cancelling now")
             raise c
 
 
