@@ -46,7 +46,7 @@ digitalWrite(thermoCS, LOW);
 delay(500);
 Serial.println("MAX31855 probe ready");
 Serial.println("Polarisation sweep controller: READY");
-Serial.print("Enter rotation in degrees: rot+45, rot-45");
+Serial.println("Enter rotation in degrees: rot+45, rot-45");
 }
 
 
