@@ -1,14 +1,11 @@
 import sys
 import os
 
-
-
 baseDir =  os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 rscDir = os.path.join(baseDir, "Resources")
 configDir = os.path.join(baseDir, "config")  # if keeping in same dir as model
 sys.path.append(baseDir)
 sys.path.append(configDir)
-
 
 from Model.experiment import *
 from Resources import ur
@@ -28,10 +25,8 @@ file_handler.setFormatter(formatter)
 stream_handler.setLevel(logging.DEBUG)
 stream_handler.setFormatter(formatter)
 
-
 logger.addHandler(file_handler)
 logger.addHandler(stream_handler)
-
 
 
 class MAXSerialTemp(QWidget):
@@ -66,6 +61,7 @@ class MAXSerialTemp(QWidget):
         self.epoch = 1
         self.keepRunning = False
         self.tempObsTask = None
+
 
     def loadConfig(self):
         
@@ -147,7 +143,9 @@ class MAXSerialTemp(QWidget):
 
     async def readTemp(self):
 
-        """Send command on serial to insert cartridge"""
+        """
+        Send command on serial to insert cartridge
+        """
 
         txt = "readTemp\n"
         self.serial.write(txt.encode())
