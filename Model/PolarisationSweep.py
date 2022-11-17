@@ -40,6 +40,7 @@ class TheaPolSweep(Experiment):
 
     polSweepFinished = pyqtSignal()
     nextScan = pyqtSignal() 
+    freezerStatus = pyqtSignal(str) 
     
 
     def __init__(self, loop = None, configFile = None):
@@ -340,6 +341,7 @@ class TheaPolSweep(Experiment):
 
         txt = "lift\n"
         self.serial.write(txt.encode())
+        self.freezerStatus.emit("lift")
 
 
     def contactFreezer(self):
@@ -348,6 +350,7 @@ class TheaPolSweep(Experiment):
 
         txt = "contact\n"
         self.serial.write(txt.encode())
+        self.freezerStatus.emit("contact")
 
 
     def ejectFreezer(self):
@@ -356,6 +359,7 @@ class TheaPolSweep(Experiment):
 
         txt = "eject\n"
         self.serial.write(txt.encode())
+        self.freezerStatus.emit("eject")
 
 
     def homeRobot(self):
