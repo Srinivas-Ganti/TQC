@@ -10,10 +10,12 @@ sys.path.append(baseDir)
 sys.path.append(viewDir)
 
 from Model.experiment import *
+from Model.TemperatureSensor import *
 from Resources import ur
 from MenloLoader import MenloLoader
 import pandas as pd
 from PyQt5 import QtSerialPort
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -43,6 +45,8 @@ class TheaPolSweep(Experiment):
     def __init__(self, loop = None, configFile = None):
         
         super().__init__(loop, configFile)
+        self.loop = loop
+        self.configFileName = configFile
         self.initialise()
         
 
@@ -70,23 +74,28 @@ class TheaPolSweep(Experiment):
         """Initialise robot via serial port"""
 
         try:
-            self.serial = QtSerialPort.QSerialPort(self.port)
-            self.serial.setBaudRate(self.baudrate)
-        except:
+            print("INITIATING SENSOR")
+            
+            self.initTemperatureSensor(self.loop, self.configFileName)
+            self.serial = self.tempSensorModel.serial
+        except Exception as e:
             print("Could not open serial device")
+            raise e
 
 
     def loadRobotConfig(self):
 
         """Load serial port config for robot"""
 
-        if self.configLoaded:
-            self.port = self.config['Robots']['port']
-            self.baudrate = self.config['Robots']['baudrate']
-            self.angle1Lim = self.config['Robots']['angle1Lim']
-            self.angle2Lim = self.config['Robots']['angle2Lim']
-            self.timeout = self.config['Robots']['timeout']
-            self.angRes = self.config['Robots']['angRes']
+    
+        print("Loading robot config")
+        self.port = self.config['Robots']['port']
+        self.baudrate = self.config['Robots']['baudrate']
+        self.angle1Lim = self.config['Robots']['angle1Lim']
+        self.angle2Lim = self.config['Robots']['angle2Lim']
+        self.timeout = self.config['Robots']['timeout']
+        self.angRes = self.config['Robots']['angRes']
+        
 
     def initResources(self):
 
@@ -110,12 +119,14 @@ class TheaPolSweep(Experiment):
         self.angle2Lim = None                                # angle 2 limit  
         self.angle1 = None                                   # angle 1 set pt
         self.angle2 = None                                   # angle2 set pt
+        self.preChill = None                                 # preChill time
+        self.interval = None                                 # refreezing time
 
 
     def initAttribs(self):
 
         """
-            Initialise class attributes for QC application with default values.
+            Initialise class attributes for application with default values.
         """
 
         self.pulseAmp = None                       # Received pulse data              
@@ -148,6 +159,27 @@ class TheaPolSweep(Experiment):
         self.timeout = None
         self.ackTask = None                         # wait for ack with timeout
         self.scanName = None
+        self.tempObsTask = None                    # temperature observation task
+        self.currentTemp = None                    # sensor reading temperature
+        self.tempSensorModel = None                # temperature sensor model
+        self.port = None                           # serial communication port
+        self.configLoaded = None                   # config loaded flag
+        self.serial = None                         # serial communications object
+        self.baudrate = None                       # baudrate for serial communication
+        self.lastMessage = None                    # serial data received
+        self.ctr = 0                               # temperature observations counter 
+        self.epoch = 1                             # temperature data buffer counter
+        self.keepRunning = False                   # continue flag for temperature observations        
+
+
+    def initTemperatureSensor(self, loop, configFileName):
+        
+        """
+            Initialise MAX31855 sensor object
+        """
+
+        self.tempSensorModel = MAXSerialTemp(loop, configFileName)
+
 
     def findResonanceMinima(self,data):
 
@@ -246,10 +278,13 @@ class TheaPolSweep(Experiment):
 
         """Do a new scan"""
 
+        self.contactFreezer()
+        await self.waitOnRobot()
         self.device.resetAveraging()
         await self.startAveraging()
+        self.liftFreezer()
+        await self.waitOnRobot()
         
-
 
     async def waitOnRobot(self):
 
@@ -282,6 +317,9 @@ class TheaPolSweep(Experiment):
                 self.device.avgTask.cancel()
                 self.device.avgTask.cancelled()
                 logger.info("Averaging cancelled")
+            if self.tempObsTask is not None:
+                self.tempObsTask.cancel()
+                logger.info("Temperature sensing task cancelled")
 
           
                 
@@ -296,12 +334,37 @@ class TheaPolSweep(Experiment):
             logger.warning("Shutting down tasks")
 
 
+    def liftFreezer(self):
+
+        """Send command on serial to break freezer contact """
+
+        txt = "lift\n"
+        self.serial.write(txt.encode())
+
+
+    def contactFreezer(self):
+
+        """Send command on serial to make freezer contact """
+
+        txt = "contact\n"
+        self.serial.write(txt.encode())
+
+
+    def ejectFreezer(self):
+
+        """Send command on serial to eject freezer """
+
+        txt = "eject\n"
+        self.serial.write(txt.encode())
+
+
     def homeRobot(self):
 
         """Send command on serial to insert cartridge"""
 
         txt = "home\n"
         self.serial.write(txt.encode())
+
 
     def rotateHolder(self, angle):
 
@@ -339,21 +402,32 @@ class TheaPolSweep(Experiment):
             self.continuePolSweep = True
             self.GIFSourceNames = [] 
             self.polSweepFinished.emit()   # emit this to check validity of the btn states
+            
+            self.ejectFreezer()
+            await self.waitOnRobot()      # eject freezer for homing
+            logger.info("Ejecting freezer")
 
-            self.homeRobot()
+            self.homeRobot()          # home pol. holder
             await self.waitOnRobot()
             logger.info("Homing complete. . .")
             
             for i in range(len(self.sweepArray)):
                 if i == 0:
                     self.requestedAngle =  self.sweepArray[i]
+                    interval = self.preChill + self.interval # wait time for freezing
                 else:
                     self.requestedAngle = abs(self.sweepArray[i-1] - self.sweepArray[i])
+                    interval = self.interval                 # wait time for re-freezing between scans
                 self.actualAngle = self.sweepArray[i]
                 print(f"Scan {i}/{len(self.sweepArray)}")
+                
                 self.rotateHolder(self.requestedAngle)
                 await self.waitOnRobot()
                 await self.getPosition()
+
+                self.contactFreezer()          # make first contact and wait for freezing
+                await self.waitOnRobot()
+                await asyncio.sleep(interval)
             
                 self.polSweepTask =  asyncio.ensure_future(self.newScan())
                 asyncio.gather(self.polSweepTask)
@@ -365,10 +439,7 @@ class TheaPolSweep(Experiment):
                 print(f"Pol. sweep progress: {self.polSweepProgVal} %")
                 self.nextScan.emit()
                 await asyncio.sleep(0.1)
-               
-                
-                
-            #         
+  
             self.cancelTasks()
             await self.device.stop()
             self.polSweepDone = True
@@ -376,11 +447,12 @@ class TheaPolSweep(Experiment):
             self.numFramesDone = 0 # reset counter for new timelapse if initiated through the GUI
             self.polSweepFinished.emit()
             await asyncio.sleep(1)
+            self.ejectFreezer()
+            await self.waitOnRobot()
             self.goHome()
             df = self.results 
             df.to_pickle(f"{self.scanName}_{self.angle1}_{self.angle2}_{self.numRequestedFrames}.pkl")
             print("SCAN COMPLETED AND DATAFRAME EXPORTED")
-
 
         except asyncio.exceptions.CancelledError:
             print("CANCELLED TIMELAPSE")        
