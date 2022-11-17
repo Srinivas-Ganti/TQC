@@ -83,7 +83,8 @@ class PolSweepMainWindow(QMainWindow):
         """
             Connect GUI object and validator signals to respective methods.
         """
-      
+
+        self.experiment.freezerStatus.connect(self.updateFreezerStatus)
         self.experiment.serial.readyRead.connect(self.receive)
         self.experiment.device.scanControl.statusChanged.connect(self._statusChanged)
         self.experiment.nextScan.connect(self.updateGraphics)
@@ -118,6 +119,13 @@ class PolSweepMainWindow(QMainWindow):
         self.btnContact.clicked.connect(self.experiment.contactFreezer)
         self.btnLift.clicked.connect(self.experiment.liftFreezer)
         self.lEditPreChill.editingFinished.connect(self.validatePreChill)
+
+
+    def updateFreezerStatus(self, status):
+        
+        """Display status of freezer position"""
+
+        self.lblStatusFreezer.setText(f"Freezer: {status}")
 
 
     @asyncSlot()
@@ -620,7 +628,7 @@ class PolSweepMainWindow(QMainWindow):
         """
 
         self.height = 950
-        self.width = 1100
+        self.width = 1110
         self.left = 10
         self.top = 40      
         self.labelValue = None         #LabelItem to display timelapse frames on plot
