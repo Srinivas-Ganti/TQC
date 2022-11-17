@@ -75,7 +75,7 @@ class PolSweepMainWindow(QMainWindow):
         super().__init__()
         self.experiment = experiment
         self.initUI()
-        self.openSerial()
+        #self.openSerial()
     
     
     def connectEvents(self):
@@ -93,21 +93,197 @@ class PolSweepMainWindow(QMainWindow):
         self.experiment.polSweepFinished.connect(self.enableAnimation)
         self.experiment.polSweepFinished.connect(self.makeGIF)
         self.lEditMaterial.editingFinished.connect(self.validateMaterial)
+        self.lEditInterval.editingFinished.connect(self.validateInterval)
         self.btnStart.clicked.connect(self.experiment.polSweepStart)
         self.btnStart.clicked.connect(self.disableLEdit)
+        self.btnStart.clicked.connect(self.startObs)
         self.btnStop.clicked.connect(self.experiment.device.stop) 
         self.btnStop.clicked.connect(self.stop) 
         self.btnStop.clicked.connect(self.experiment.cancelTasks)
+        self.btnStop.clicked.connect(self.stopObs)
         self.btnAnimateResult.clicked.connect(self.animateGIF)
         self.lEditTdsStart.editingFinished.connect(self.validateEditStart)
-        
         self.lEditTdsAvgs.editingFinished.connect(self.validateEditAverages)
-
         self.lEditAngle1.editingFinished.connect(self.validateEditAngle1)
         self.lEditAngle2.editingFinished.connect(self.validateEditAngle2)
         self.lEditFrames.editingFinished.connect(self.validateFrames)
         self.lEditTdsAvgs.textChanged.connect(self.avgsChanged)
         self.livePlot.scene().sigMouseMoved.connect(self.mouseMoved)
+        self.experiment.tempSensorModel.serial.readyRead.connect(self.receive)
+        self.experiment.tempSensorModel.nextScan.connect(self.plotTemp)
+        self.livePlot_2.scene().sigMouseMoved.connect(self.mouseMoved2)
+        self.btnStartTemp.clicked.connect(self.startObs)
+        self.btnStopTemp.clicked.connect(self.stopObs)
+        self.btnEject.clicked.connect(self.experiment.ejectFreezer)
+        self.btnContact.clicked.connect(self.experiment.contactFreezer)
+        self.btnLift.clicked.connect(self.experiment.liftFreezer)
+        self.lEditPreChill.editingFinished.connect(self.validatePreChill)
+
+
+    @asyncSlot()
+    async def startObs(self):
+
+        """
+        Start temperature sensing historical
+        """
+
+        self.btnStartTemp.setEnabled(False)
+        self.experiment.tempSensorModel.keepRunning = True
+        self.experiment.tempSensorModel.clearData()
+        while self.experiment.tempSensorModel.keepRunning:
+            self.experiment.tempSensorModel.tempObsTask =  asyncio.ensure_future(self.experiment.tempSensorModel.readTemp())
+            asyncio.gather(self.experiment.tempSensorModel.tempObsTask)
+            while not self.experiment.tempSensorModel.tempObsTask.done():
+                await asyncio.sleep(1/self.experiment.tempSensorModel.config['TemperatureSensor']['samplingRate'])
+
+
+    @asyncSlot()
+    async def stopObs(self):
+        """
+        Stop temperature sensing historical
+        """
+        self.btnStartTemp.setEnabled(True)
+        self.experiment.tempSensorModel.keepRunning = False
+        try:
+            self.experiment.tempSensorModel.tempObsTask.cancel()
+            self.experiment.tempSensorModel.ackTask.cancel()
+            self.epoch = 1
+            self.ctr = 0
+            self.experiment.tempSensorModel.clearData()
+            self.lblTempBig.setText(f"Cold finger Temp (C): --")    
+            self.xmin = 1
+            self.xmax = self.experiment.tempSensorModel.config['TemperatureSensor']['scrollLength'] 
+            self.livePlot_2.setXRange(self.xmin, self.xmax)
+            #self.experiment.tempSensorModel.time = np.linspace(1,self.experiment.tempSensorModel.config['TemperatureSensor']['scrollLength'],
+            #                                  self.experiment.tempSensorModel.config['TemperatureSensor']['scrollLength'])
+            self.experiment.tempSensorModel.clearData()
+            self.data[:] = np.NaN
+            self.plotT.curve.setData(self.experiment.tempSensorModel.time,self.data)
+        except asyncio.exceptions.CancelledError:
+            print("Cancelled Observation")
+
+
+
+    def mouseMoved2(self, evt):
+
+        """
+            Track mouse movement on data plot in plot units (deg C vs sec)
+
+            :type evt: pyqtSignal 
+            :param evt: Emitted when the mouse cursor moves over the scene. Contains scene cooridinates of the mouse cursor.
+
+        """
+
+        pos = evt
+        if self.livePlot_2.sceneBoundingRect().contains(pos):
+            mousePoint = self.livePlot_2.plotItem.vb.mapSceneToView(pos)
+            x = float("{0:.3f}".format(mousePoint.x()))
+            y = float("{0:.3f}".format(mousePoint.y()))
+            self.xyLabel_2.setText(f"last cursor position: {x, y}")
+
+
+    def validatePreChill(self):
+
+        """
+            Validate user input for Requested Interval of the timelapse
+        """ 
+
+        try:
+            isinstance(ur(self.lEditPreChill.text()), ur.Quantity)
+            preChill = ur(self.lEditPreChill.text())
+            if isinstance(preChill, int):
+                preChill = preChill*ur("s")
+            if preChill.units in ["second", "minute", "hour"]: 
+                logger.info("pre-Chill value is a valid time input")
+                logger.info("Freezer pre-Chill time ACCEPTED")
+                self.experiment.preChill = preChill.m_as("second")
+                logger.info(f"Pre-chill time is set to {self.experiment.preChill} seconds")
+            else:
+                logger.warning("Pre-Chill quantity units are not valid time inputs, Setting default config values")
+                logger.warning("Enter valid units, for example: '0.5hour', '420ms', '5min' . . . ")
+                self.lEditPreChill.setText(str(self.experiment.config['PolSweep']['preChill']))
+                self.experiment.preChill = ur(str(self.experiment.config['PolSweep']['preChill'])).m_as("second")
+            self.experiment.preChilllOk = True
+        except UndefinedUnitError:
+            self.experiment.preChillOk = False
+            logger.info("Undefined / Incorrect units. Setting default config value")
+            self.lEditPreChill.setText(str(self.experiment.config['PolSweep']['preChill']))
+            self.experiment.preChill = ur(str(self.experiment.config['PolSweep']['preChill']))
+            self.experiment.preChillOk = True
+
+
+    def validateInterval(self):
+
+        """
+            Validate user input for Requested Interval of the timelapse
+        """ 
+
+        try:
+            isinstance(ur(self.lEditInterval.text()), ur.Quantity)
+            interval = ur(self.lEditInterval.text())
+            if isinstance(interval, int):
+                interval = interval*ur("s")
+            if interval.units in ["second", "minute", "hour"]: 
+                logger.info("Interval is a valid time input")
+                logger.info("Timelapse interval ACCEPTED")
+                self.experiment.interval = interval.m_as("second")
+                logger.info(f"Interval is set to {self.experiment.interval} seconds")
+            else:
+                logger.warning("Interval units are not valid time inputs, Setting default config values")
+                logger.warning("Enter valid units, for example: '0.5hour', '420ms', '5min' . . . ")
+                self.lEditInterval.setText(str(self.experiment.config['PolSweep']['interval']))
+                self.interval = ur(str(self.experiment.config['PolSweep']['interval'])).m_as("second")
+            self.experiment.intervalOk = True
+        except UndefinedUnitError:
+            self.experiment.intervalOk = False
+            logger.info("Undefined / Incorrect units. Setting default config value")
+            self.lEditInterval.setText(str(self.experiment.config['PolSweep']['interval']))
+            self.experiment.interval = ur(str(self.experiment.config['PolSweep']['interval']))
+            self.experiment.intervalOk = True
+
+
+    def plotTemp(self, line):
+
+        """
+        Plot temperature vs time
+        """
+
+        if "deg C" in line:
+
+            self.experiment.tempSensorModel.ctr += 1
+            temp = line.split("deg")[0]
+            self.lblTempBig.setText(f"Cold finger Temp: {temp} C")  
+
+            def correctData():
+                self.experiment.tempSensorModel.temperatures = np.append(self.experiment.tempSensorModel.temperatures,
+                                                                         double(line.split("deg")[0]))
+                self.experiment.tempSensorModel.temperatures = np.roll(self.experiment.tempSensorModel.temperatures, 1)
+                self.experiment.tempSensorModel.temperatures = np.delete(self.experiment.tempSensorModel.temperatures, -1)
+                flipped = np.flip(self.experiment.tempSensorModel.temperatures)
+                return flipped
+                                
+            if self.experiment.tempSensorModel.ctr != self.experiment.tempSensorModel.config['TemperatureSensor']['scrollLength']:
+                nanidx = self.experiment.tempSensorModel.ctr
+                flipped = correctData()
+                self.data = np.append(flipped[len(flipped)-nanidx:], flipped[:len(flipped)-nanidx])      
+            
+            else:
+                self.experiment.tempSensorModel.ctr = 1
+                self.experiment.tempSensorModel.epoch+=1
+                self.experiment.tempSensorModel.clearData()
+                self.xmin = self.xmin + self.experiment.tempSensorModel.config['TemperatureSensor']['scrollLength']
+                self.xmax = self.xmax + self.experiment.tempSensorModel.config['TemperatureSensor']['scrollLength']
+                self.experiment.tempSensorModel.time = np.linspace(self.xmin,self.xmax,
+                                                                   self.experiment.tempSensorModel.config['TemperatureSensor']['scrollLength'])
+                self.livePlot_2.setXRange(self.xmin, self.xmax)
+                flipped = correctData()
+                nanidx =  self.experiment.tempSensorModel.ctr
+                self.data = self.experiment.tempSensorModel.temperatures
+           
+            self.experiment.currentTemp = self.data[np.isfinite(self.data)][-1]  
+            self.plotT.curve.setData(self.experiment.tempSensorModel.time,self.data)
+            self.plotT.curve.setPen(color = self.colorTemp, width = self.averagePlotLineWidth)
+            
 
 
     def validateMaterial(self):
@@ -123,6 +299,7 @@ class PolSweepMainWindow(QMainWindow):
             self.experiment.scanName = "Data"
             print("Using default name - data")
 
+
     @asyncSlot()
     async def receive(self):
 
@@ -133,7 +310,10 @@ class PolSweepMainWindow(QMainWindow):
             
             codec = QTextCodec.codecForName("UTF-8")
             line = codec.toUnicode(self.experiment.serial.readLine()).strip()
-            print(line)
+            if "deg C" in line:
+                self.experiment.tempSensorModel.nextScan.emit(line) 
+            self.experiment.tempSensorModel.lastMessage = line
+            
             self.experiment.lastMessage = line
             await asyncio.sleep(0.1)
 
@@ -144,7 +324,7 @@ class PolSweepMainWindow(QMainWindow):
 
         
         self.experiment.serial.open(QIODevice.ReadWrite)
-
+        self.experiment.tempSensorModel.serial.open(QIODevice.ReadWrite)
 
     def animateGIF(self):
         
@@ -390,6 +570,10 @@ class PolSweepMainWindow(QMainWindow):
         
         self.lEditFrames.setText(str(self.experiment.config['PolSweep']['frames']))
         self.lEditFrames.editingFinished.emit()
+        self.lEditInterval.setText(str(self.experiment.config['PolSweep']['interval']))
+        self.lEditInterval.editingFinished.emit()
+        self.lEditPreChill.setText(str(self.experiment.config['PolSweep']['preChill']))
+        self.lEditPreChill.editingFinished.emit()
         self.loadTDSParams()
     
         print("> [SCANCONTROL] Setting TDS parameters: Done\n")        
@@ -436,7 +620,7 @@ class PolSweepMainWindow(QMainWindow):
         """
 
         self.height = 950
-        self.width = 570
+        self.width = 1100
         self.left = 10
         self.top = 40      
         self.labelValue = None         #LabelItem to display timelapse frames on plot
@@ -449,6 +633,7 @@ class PolSweepMainWindow(QMainWindow):
         self.averagePlotLineWidth = 1.5
         self.plotDataContainer = {'livePulseFft': None}       # Dictionary for plot items
         self.lEditTdsEnd.setReadOnly(True)
+        self.btnStartTemp.setEnabled(True)
         self.scanName = None
 
 
@@ -488,6 +673,20 @@ class PolSweepMainWindow(QMainWindow):
         self.gifList = None
         self.gifWindow = AnotherWindow()
         self.gifName = ""
+        self.colorTemp = (255,255,0, 180)
+        self.livePlot_2.setLabel('left', 'Temperature (C)')
+        self.livePlot_2.setLabel('bottom', 'Observations - 1/Sampling Rate (sec)')
+        self.livePlot_2.setTitle("""Temperature historical""", color = 'g', size = "45 pt")   
+        self.livePlot_2.showGrid(x = True, y = True)
+        self.TplotDataContainer = {}
+        
+        self.xmin = 1
+        self.xmax = self.experiment.tempSensorModel.config['TemperatureSensor']['scrollLength'] 
+        self.plotT = self.livePlot_2.plot(self.experiment.tempSensorModel.temperatures)
+        self.livePlot_2.setXRange(self.xmin, self.xmax)
+        self.livePlot_2.setYRange(50, -100)
+        self.lblTempBig.setText("Cold Finger temp. (C): --")
+               
 
 
     def disableButtons(self):
@@ -498,6 +697,7 @@ class PolSweepMainWindow(QMainWindow):
 
         self.btnStart.setEnabled(False)
         self.btnAnimateResult.setEnabled(False)
+        self.btnStartTemp.setEnabled(False)
 
 
     def enableButtons(self):
@@ -508,6 +708,7 @@ class PolSweepMainWindow(QMainWindow):
         
         self.btnStart.setEnabled(True)
         self.btnStop.setEnabled(True)
+        self.btnStartTemp.setEnabled(True)
         
 
     def stop(self):
