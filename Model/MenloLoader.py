@@ -127,13 +127,13 @@ class MenloLoader:
                         dtlist.append(
                                       datetime.datetime.strptime(com.split('Timestamp')[1]\
                                                                  .split('\n')[0][2:],
-                                                                '%y-%m-%dT%H:%M:%S'))                   
+                                                                '%Y-%m-%dT%H:%M:%S'))                   
                     elif com.startswith('#') and "Timestamp" in com and 'wafer' in com:
                         try:
                             dtlist.append(
                                           datetime.datetime.strptime(com.split('Timestamp')[1].split(',')[0] \
                                                                  .split('\n')[0][2:][2:],
-                                                                '%y-%m-%dT%H:%M:%S'))                   
+                                                                '%Y-%m-%dT%H:%M:%S'))                   
                         except ValueError:                                                            
                             print("Incorrect file type")
 
