@@ -1,5 +1,12 @@
-#include "Adafruit_MAX31855.h"
+#include <Adafruit_MAX31855.h>
+#include <PololuMaestro.h>
+#include <SoftwareSerial.h>
 
+#define tx 2      //arduino side tx pin
+#define rx 3      //arduino side rx pin
+#define CONTACT 0 // Sequence number on servo controller
+#define LIFT 1    // Sequence number on servo controller
+#define EJECT 2   // Sequence number on servo controller 
 #define thermoDO 4
 #define thermoCS 8
 #define thermoCLK 7
@@ -10,9 +17,11 @@
 #define limSwitch 6
 
 double temperature;
-double errorCompensation = -24.5;
-
+double errorCompensation = -27.5;
+int travelDelay = 1000;
 Adafruit_MAX31855 thermocouple(thermoCLK, thermoCS, thermoDO);
+SoftwareSerial maestroSerial(3,2); // reverse tx/rx for the maestro side
+MiniMaestro maestro(maestroSerial);
 
 bool isData; 
 bool dir;
@@ -26,29 +35,27 @@ double toGo; // difference between pos and target
 int i = 0; // step instruction 
 int step_number = 0;
 const int homingDelay = 4000;
-const int movementDelay = 2000;
+const int movementDelay = 4000;
 const int stepsPerDegree = 28;  
 
-
 void setup() {
-pinMode(thermoCLK, OUTPUT);
-pinMode(thermoCS, OUTPUT);
-pinMode(thermoDO, INPUT);
-pinMode(STEPPER_PIN_1, OUTPUT);
-pinMode(STEPPER_PIN_2, OUTPUT);
-pinMode(STEPPER_PIN_3, OUTPUT);
-pinMode(STEPPER_PIN_4, OUTPUT);
-pinMode(limSwitch, INPUT);
-
-Serial.begin(115200);
-while (!Serial);
-digitalWrite(thermoCS, LOW);
-delay(500);
-Serial.println("MAX31855 probe ready");
-Serial.println("Polarisation sweep controller: READY");
-Serial.println("Enter rotation in degrees: rot+45, rot-45");
+  pinMode(thermoCLK, OUTPUT);
+  pinMode(thermoCS, OUTPUT);
+  pinMode(thermoDO, INPUT);
+  pinMode(STEPPER_PIN_1, OUTPUT);
+  pinMode(STEPPER_PIN_2, OUTPUT);
+  pinMode(STEPPER_PIN_3, OUTPUT);
+  pinMode(STEPPER_PIN_4, OUTPUT);
+  pinMode(limSwitch, INPUT);
+  maestroSerial.begin(9600);
+  Serial.begin(9600);
+  while (!Serial);
+  digitalWrite(thermoCS, LOW);
+  delay(500);
+  Serial.println("MAX31855 probe ready");
+  Serial.println("Polarisation sweep controller: READY");
+  Serial.println("Enter rotation in degrees: rot+45, rot-45");
 }
-
 
 void loop() {
   while (Serial.available() > 0){
@@ -70,15 +77,27 @@ void loop() {
       else if (Command.startsWith("readTemp")) {
       readTemperature();
        } 
-       
+      else if (Command.startsWith("eject")){
+        Serial.println("Eject . . . ");   
+        ejectHopper();
+       }
+      else if (Command.startsWith("contact")){
+        Serial.println("Contact . . . ");
+        contactHopper();
+       }
+      else if (Command.startsWith("lift")){
+        Serial.println("Lifting Hopper . . . ");   
+        liftHopper();
+       }
       else if(Command.startsWith("pos")){
         position();
-        }    
+       }    
    Command = "";
   }
   delay(20); 
   
 }
+
 
 void readTemperature(){
   temperature = thermocouple.readCelsius() + errorCompensation;
@@ -86,6 +105,27 @@ void readTemperature(){
   Serial.print(" deg C\n");
   Serial.println("");
   Serial.print("ACK\n");
+  }
+
+
+void contactHopper(){
+  maestro.restartScript(CONTACT);
+  delay(travelDelay);
+  Serial.println("ACK\n");
+  }
+
+
+void liftHopper(){
+  maestro.restartScript(LIFT);
+  delay(travelDelay);
+  Serial.println("ACK\n");
+  }
+
+
+void ejectHopper(){
+  maestro.restartScript(EJECT);
+  delay(travelDelay);
+  Serial.println("ACK\n");
   }
 
 
@@ -116,12 +156,10 @@ void position(){
   Serial.println(pos);
   }
 
-
-
 void rotate(String str) {
-  if (!homed){
-    home();
-  }
+ // if (!homed){
+  //  home();
+ // }
   Serial.println("Rotating by: ");
   Serial.println(str);
   angle = str.substring(4).toDouble();
@@ -149,7 +187,6 @@ void rotate(String str) {
   Serial.println("");
   Serial.print("ACK\n");
   }
-
 
 void OneStep(bool dir){
     if(dir){
