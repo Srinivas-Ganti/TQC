@@ -85,7 +85,11 @@ class MAXSerialTemp(QWidget):
         self.port = self.config['TemperatureSensor']['port']
         self.baudrate = self.config['TemperatureSensor']['baudrate']
         self.timeout = self.config['TemperatureSensor']['timeout']
-        self.initSerial()
+        try:
+            self.initSerial()
+        except Exception as e:
+            print("Connect failed/ already open")
+            raise e
         self.clearData()
 
 
