@@ -7,17 +7,25 @@ Spectrometer:
   systemNum: 9
 TScan:
   begin: -271
-  numAvgs: 10
+  numAvgs: 1
   window: 400    
 PolSweep:
   frames: 10 # number of scans
   angle1: 90 # anticlockwise degrees from the upright cartridge position.
   angle2: -90 # clockwise degrees from the upright cartridge position
   numDisplayDataSeries: 5
+  interval: 1s
+  preChill: 10s
 Robots:
-  baudrate: 115200
+  baudrate: 9600
   port: COM5
   timeout: 45
   angle1Lim: 120
   angle2Lim: -120
   angRes: 0.2
+TemperatureSensor:
+  port: COM5
+  baudrate: 9600
+  timeout: 4
+  scrollLength: 5000
+  samplingRate: 0.75 
